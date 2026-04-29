@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   test: {
-    name: 'effector-query',
+    name: 'effector-tanstack-query',
     dir: './src',
     watch: false,
     environment: 'jsdom',

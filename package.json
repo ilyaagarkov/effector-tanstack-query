@@ -1,16 +1,16 @@
 {
-  "name": "effector-query",
+  "name": "effector-tanstack-query",
   "version": "0.1.0",
   "description": "Effector bindings for TanStack Query — reactive data fetching with effector stores, SSR, and Suspense.",
   "license": "MIT",
   "author": "Ilya Agarkov <ilya.al.ag@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ilyaagarkov/effector-query.git"
+    "url": "git+https://github.com/ilyaagarkov/effector-tanstack-query.git"
   },
-  "homepage": "https://github.com/ilyaagarkov/effector-query#readme",
+  "homepage": "https://github.com/ilyaagarkov/effector-tanstack-query#readme",
   "bugs": {
-    "url": "https://github.com/ilyaagarkov/effector-query/issues"
+    "url": "https://github.com/ilyaagarkov/effector-tanstack-query/issues"
   },
   "keywords": [
     "effector",

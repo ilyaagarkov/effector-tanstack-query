@@ -1,18 +1,18 @@
-# effector-query
+# effector-tanstack-query
 
 Effector bindings for [TanStack Query](https://tanstack.com/query) -- reactive data fetching with Effector stores.
 
 ## Installation
 
 ```bash
-npm install effector-query @tanstack/query-core effector
+npm install effector-tanstack-query @tanstack/query-core effector
 ```
 
 ## Quick Start
 
 ```ts
 import { QueryClient } from '@tanstack/query-core'
-import { createQuery, createMutation } from 'effector-query'
+import { createQuery, createMutation } from 'effector-tanstack-query'
 
 const queryClient = new QueryClient()
 queryClient.mount()
@@ -154,7 +154,7 @@ All standard `QueryObserverOptions` are supported: `staleTime`, `gcTime`, `retry
 Fetches paginated data with automatic page tracking.
 
 ```ts
-import { createInfiniteQuery } from 'effector-query'
+import { createInfiniteQuery } from 'effector-tanstack-query'
 
 const postsQuery = createInfiniteQuery(queryClient, {
   queryKey: ['posts'],
@@ -359,12 +359,12 @@ All standard `MutationObserverOptions` are supported: `retry`, `retryDelay`, `on
 
 ## Usage with React
 
-Two options: the high-level hooks from `effector-query/react` (recommended), or the low-level `useUnit` pattern with manual lifecycle.
+Two options: the high-level hooks from `effector-tanstack-query/react` (recommended), or the low-level `useUnit` pattern with manual lifecycle.
 
 ### High-level hooks
 
 ```tsx
-import { useQuery, useMutation, useInfiniteQuery } from 'effector-query/react'
+import { useQuery, useMutation, useInfiniteQuery } from 'effector-tanstack-query/react'
 
 function UserProfile() {
   const { data, isPending, error, refresh } = useQuery(userQuery)
@@ -387,7 +387,7 @@ The hook automatically calls `mounted()` on mount, `unmounted()` on cleanup, and
 `useSuspenseQuery` and `useSuspenseInfiniteQuery` integrate with React `<Suspense>` and error boundaries. While the query is pending, they throw an inflight promise; on error, they throw the error; otherwise they return data directly.
 
 ```tsx
-import { useSuspenseQuery } from 'effector-query/react'
+import { useSuspenseQuery } from 'effector-tanstack-query/react'
 
 function UserProfile() {
   const user = useSuspenseQuery(userQuery) // throws or returns User
