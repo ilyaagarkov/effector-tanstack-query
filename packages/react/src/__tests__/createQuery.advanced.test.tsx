@@ -5,8 +5,8 @@ import { Provider } from 'effector-react'
 import { allSettled, createEvent, createStore, fork } from 'effector'
 import { QueryClient } from '@tanstack/query-core'
 import { queryKey, sleep } from './test-utils'
-import { createQuery } from '../createQuery'
-import { useQuery } from '../react'
+import { createQuery } from '@effector-tanstack-query/core'
+import { useQuery } from '..'
 import type { Scope } from 'effector'
 
 function renderWithScope(scope: Scope, ui: React.ReactElement) {

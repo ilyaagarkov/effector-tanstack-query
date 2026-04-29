@@ -3,7 +3,7 @@ import { act } from '@testing-library/react'
 import { allSettled, fork } from 'effector'
 import { QueryClient, onlineManager } from '@tanstack/query-core'
 import { sleep } from './test-utils'
-import { createMutation } from '../createMutation'
+import { createMutation } from '@effector-tanstack-query/core'
 
 function mockOnline(value: boolean) {
   return vi.spyOn(onlineManager, 'isOnline').mockReturnValue(value)

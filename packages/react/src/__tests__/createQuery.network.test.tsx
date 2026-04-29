@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render } from '@testing-library/react'
 import { QueryClient, onlineManager } from '@tanstack/query-core'
 import { queryKey, sleep } from './test-utils'
-import { createQuery } from '../createQuery'
-import { useQuery } from '../react'
+import { createQuery } from '@effector-tanstack-query/core'
+import { useQuery } from '..'
 
 function mockOnline(value: boolean) {
   return vi.spyOn(onlineManager, 'isOnline').mockReturnValue(value)

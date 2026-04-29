@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@effector-tanstack-query/core": ["../core/src/index.ts"]
+    },
+    "noEmit": true
+  },
+  "include": ["src/**/*", "../core/src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "../core/src/__tests__/**"
+  ]
+}

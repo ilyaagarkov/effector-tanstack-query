@@ -18,7 +18,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -38,7 +38,7 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish to npm
-        run: pnpm publish --access public --no-git-checks --provenance
+      - name: Publish all workspace packages to npm
+        run: pnpm release
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

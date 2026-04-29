@@ -3,8 +3,8 @@ import { act, render } from '@testing-library/react'
 import { allSettled, fork } from 'effector'
 import { QueryClient } from '@tanstack/query-core'
 import { queryKey, sleep } from './test-utils'
-import { createQuery } from '../createQuery'
-import { useQuery } from '../react'
+import { createQuery } from '@effector-tanstack-query/core'
+import { useQuery } from '..'
 
 describe('createQuery — refetch with cancelRefetch', () => {
   let queryClient: QueryClient

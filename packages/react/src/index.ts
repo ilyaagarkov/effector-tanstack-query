@@ -6,7 +6,7 @@ import type {
   MutationResult,
   MutationStatus,
   QueryResult,
-} from './types'
+} from '@effector-tanstack-query/core'
 
 export interface UseQueryResult<TData, TError = Error> {
   data: TData | undefined

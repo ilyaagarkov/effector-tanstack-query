@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -24,7 +24,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
@@ -37,8 +37,8 @@ jobs:
       - name: Type check
         run: pnpm test:types
 
-      - name: Run tests with coverage
-        run: pnpm test:coverage
+      - name: Run tests
+        run: pnpm test
 
       - name: Build
         run: pnpm build
@@ -48,5 +48,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage/
+          path: packages/*/coverage/
           retention-days: 7

@@ -1,10 +1,8 @@
 import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
   test: {
-    name: 'effector-tanstack-query',
+    name: '@effector-tanstack-query/core',
     dir: './src',
     watch: false,
     environment: 'jsdom',
@@ -16,6 +14,5 @@ export default defineConfig({
     },
     typecheck: { enabled: true },
     restoreMocks: true,
-    setupFiles: ['test-setup.ts'],
   },
 })

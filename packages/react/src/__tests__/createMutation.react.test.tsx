@@ -5,7 +5,7 @@ import { Provider, useUnit } from 'effector-react'
 import { allSettled, fork } from 'effector'
 import { MutationCache, QueryClient } from '@tanstack/query-core'
 import { sleep } from './test-utils'
-import { createMutation } from '../createMutation'
+import { createMutation } from '@effector-tanstack-query/core'
 import type { Scope } from 'effector'
 
 function renderWithScope(scope: Scope, ui: React.ReactElement) {

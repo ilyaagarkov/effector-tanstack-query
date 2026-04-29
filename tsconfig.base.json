@@ -20,16 +20,11 @@
     "skipLibCheck": true,
 
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": false,
 
-    "outDir": "./dist",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "removeComments": false,
 
     "types": ["vitest/globals", "node"]
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  }
 }
