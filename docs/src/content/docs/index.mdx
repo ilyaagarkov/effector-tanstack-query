@@ -1,0 +1,68 @@
+---
+title: effector-tanstack-query
+description: Effector bindings for TanStack Query — reactive data fetching with effector stores, SSR, and Suspense.
+template: splash
+hero:
+  tagline: Reactive data fetching with effector stores. Powered by TanStack Query — same battle-tested cache, deduplication, and lifecycle, exposed as effector units.
+  actions:
+    - text: Get started
+      link: /effector-tanstack-query/introduction/quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/ilyaagarkov/effector-tanstack-query
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+<CardGrid stagger>
+  <Card title="Reactive query keys" icon="seti:typescript">
+    Drop an effector `Store` into `queryKey` and the query refetches automatically when the store changes.
+  </Card>
+
+  <Card title="SSR built-in" icon="seti:html">
+    Round-trip both `queryClient` (`dehydrate`/`hydrate`) and effector scope (`serialize`/`fork({ values })`) with a stable `name`.
+  </Card>
+
+  <Card title="Suspense ready" icon="rocket">
+    `useSuspenseQuery` / `useSuspenseInfiniteQuery` integrate with React `<Suspense>` and error boundaries out of the box.
+  </Card>
+
+  <Card title="Effector-idiomatic" icon="puzzle">
+    `finished.success` / `finished.failure` events for `sample`-based composition. No need to wire callbacks.
+  </Card>
+</CardGrid>
+
+## At a glance
+
+```ts
+import { QueryClient } from '@tanstack/query-core'
+import { createQuery } from '@effector-tanstack-query/core'
+import { createStore, createEvent } from 'effector'
+
+const queryClient = new QueryClient()
+queryClient.mount()
+
+const setUserId = createEvent<number>()
+const $userId = createStore(1).on(setUserId, (_, id) => id)
+
+const userQuery = createQuery(queryClient, {
+  name: 'user',
+  queryKey: ['user', $userId],
+  queryFn: ({ queryKey }) => fetch(`/api/users/${queryKey[1]}`).then((r) => r.json()),
+})
+
+userQuery.mounted()
+setUserId(2) // → triggers a refetch with the new key
+```
+
+## Why this exists
+
+TanStack Query is the de-facto standard for client-side data fetching, but its native API is built around React render cycles and hooks. Effector applications usually keep state outside the component tree — and want the same cache, deduplication, and revalidation **as effector stores and events**.
+
+This library is a thin adapter that:
+
+- exposes every observer field (`data`, `status`, `isPending`, `isFetching`, `isPlaceholderData`, …) as a `Store<T>`,
+- forwards every imperative action (`refetch`, `fetchNextPage`, `mutate`, `reset`, …) as an `EventCallable`,
+- and lets you compose with the rest of effector via `sample` and `combine` — without re-implementing the cache.

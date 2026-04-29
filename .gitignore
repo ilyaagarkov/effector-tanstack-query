@@ -6,6 +6,7 @@ coverage/
 .tsbuildinfo
 *.tsbuildinfo
 .tsup/
+.astro/
 
 .DS_Store
 .idea/
