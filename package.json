@@ -1,0 +1,105 @@
+{
+  "name": "effector-query",
+  "version": "0.1.0",
+  "description": "Effector bindings for TanStack Query — reactive data fetching with effector stores, SSR, and Suspense.",
+  "license": "MIT",
+  "author": "Ilya Agarkov <ilya.al.ag@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ilyaagarkov/effector-query.git"
+  },
+  "homepage": "https://github.com/ilyaagarkov/effector-query#readme",
+  "bugs": {
+    "url": "https://github.com/ilyaagarkov/effector-query/issues"
+  },
+  "keywords": [
+    "effector",
+    "tanstack",
+    "query",
+    "react-query",
+    "data-fetching",
+    "ssr",
+    "suspense"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/__tests__"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "clean": "rm -rf ./dist ./coverage",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --run --coverage",
+    "test:types": "tsc --noEmit",
+    "lint": "eslint src",
+    "prepublishOnly": "pnpm run clean && pnpm run test && pnpm run test:types && pnpm run build"
+  },
+  "dependencies": {
+    "@tanstack/query-core": "^5.0.0"
+  },
+  "peerDependencies": {
+    "effector": ">=23.0.0",
+    "effector-react": ">=23.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "effector-react": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.3",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-istanbul": "^4.0.6",
+    "effector": "^23.4.4",
+    "effector-react": "^23.3.0",
+    "esbuild-plugin-file-path-extensions": "^2.1.4",
+    "jsdom": "^27.4.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
