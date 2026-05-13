@@ -16,21 +16,21 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components'
 
-<CardGrid stagger>
+<CardGrid>
   <Card title="Reactive query keys" icon="seti:typescript">
-    Drop an effector `Store` into `queryKey` and the query refetches automatically when the store changes.
+    Drop an effector `Store` into `queryKey` — the query refetches automatically when the store changes.
   </Card>
 
   <Card title="SSR built-in" icon="seti:html">
-    Round-trip both `queryClient` (`dehydrate`/`hydrate`) and effector scope (`serialize`/`fork({ values })`) with a stable `name`.
+    Round-trip the `queryClient` cache (`dehydrate`/`hydrate`) and the effector scope (`serialize`/`fork`) for hydration without a flash.
   </Card>
 
   <Card title="Suspense ready" icon="rocket">
-    `useSuspenseQuery` / `useSuspenseInfiniteQuery` integrate with React `<Suspense>` and error boundaries out of the box.
+    `useSuspenseQuery` and `useSuspenseInfiniteQuery` plug straight into React `<Suspense>` and error boundaries.
   </Card>
 
   <Card title="Effector-idiomatic" icon="puzzle">
-    `finished.success` / `finished.failure` events for `sample`-based composition. No need to wire callbacks.
+    `finished.success` / `finished.failure` events compose with `sample` — declarative reactions, no component callbacks.
   </Card>
 </CardGrid>
 
