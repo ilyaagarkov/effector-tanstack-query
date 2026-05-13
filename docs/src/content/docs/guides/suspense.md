@@ -7,7 +7,7 @@ description: Throw promises and errors into React's Suspense and ErrorBoundary.
 
 - While pending → throws an inflight promise (deduplicated by `queryClient.fetchQuery`)
 - On error → throws the error (catch with `<ErrorBoundary>`)
-- On success → returns data **directly** (not wrapped in `{ data, isPending }`)
+- On success → returns the **same shape as `useQuery`** (`{ data, error, isFetching, refresh, … }`), with `data` narrowed to non-nullable `TData` because the pending state can't reach the rendered subtree.
 
 ## Usage
 
@@ -16,8 +16,14 @@ import { Suspense } from 'react'
 import { useSuspenseQuery } from '@effector-tanstack-query/react'
 
 function UserProfile() {
-  const user = useSuspenseQuery(userQuery) // returns User directly
-  return <h1>{user.name}</h1>
+  const { data: user, isFetching, refresh } = useSuspenseQuery(userQuery)
+  // `user` is non-nullable; `isFetching` flips during background refetch.
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <button onClick={refresh} disabled={isFetching}>Refresh</button>
+    </div>
+  )
 }
 
 function App() {
@@ -45,7 +51,7 @@ If the cache already has data and `staleTime` keeps it fresh, the hook returns i
 queryClient.setQueryData(['user', 1], { name: 'Alice' })
 
 function UserProfile() {
-  const user = useSuspenseQuery(userQuery) // doesn't suspend, returns 'Alice'
+  const { data: user } = useSuspenseQuery(userQuery) // doesn't suspend
   return <h1>{user.name}</h1>
 }
 ```
@@ -65,7 +71,7 @@ const userQuery = createQuery({
 })
 
 function UserProfile() {
-  const user = useSuspenseQuery(userQuery)
+  const { data: user } = useSuspenseQuery(userQuery)
   return <h1>{user.name}</h1>
 }
 
@@ -78,13 +84,25 @@ function UserProfile() {
 import { useSuspenseInfiniteQuery } from '@effector-tanstack-query/react'
 
 function Feed() {
-  const data = useSuspenseInfiniteQuery(postsQuery)
-  // data: InfiniteData<Post, number>
-  return data.pages.flatMap((p) => p.items).map((post) => <Post key={post.id} {...post} />)
+  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useSuspenseInfiniteQuery(postsQuery)
+
+  return (
+    <>
+      {data.pages.flatMap((p) => p.items).map((post) => (
+        <Post key={post.id} {...post} />
+      ))}
+      {hasNextPage && (
+        <button onClick={fetchNextPage} disabled={isFetchingNextPage}>
+          {isFetchingNextPage ? 'Loading…' : 'Load more'}
+        </button>
+      )}
+    </>
+  )
 }
 ```
 
-`fetchNextPage` is still on the underlying query object and can be called from the parent component.
+The hook returns the same fields as [`useInfiniteQuery`](/effector-tanstack-query/react/use-infinite-query/) — `hasNextPage`, `fetchNextPage`, `isFetchingNextPage`, etc. — with `data` narrowed to non-nullable `InfiniteData`.
 
 ## Concurrent / mixed consumers
 

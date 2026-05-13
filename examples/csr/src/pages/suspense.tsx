@@ -37,8 +37,9 @@ class ErrorBoundary extends React.Component<
 
 function PokemonCard() {
   // No isPending / error branches needed — Suspense and ErrorBoundary cover
-  // both. The hook returns Pokemon directly.
-  const pokemon = useSuspenseQuery(pokemonQuery)
+  // both. `data` is non-nullable; `isFetching` flips during background
+  // refetch (same shape as react-query's useSuspenseQuery).
+  const { data: pokemon, isFetching } = useSuspenseQuery(pokemonQuery)
 
   return (
     <div className="row">
@@ -47,6 +48,7 @@ function PokemonCard() {
       )}
       <div>
         <strong>{pokemon.name}</strong>
+        {isFetching && <span className="badge pending"> refetching…</span>}
         <div className="muted">
           height {pokemon.height} · weight {pokemon.weight}
         </div>

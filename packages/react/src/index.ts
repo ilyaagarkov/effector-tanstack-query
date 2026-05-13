@@ -209,18 +209,40 @@ interface SuspenseFactory<TObserver> {
   __enabled: import('effector').Store<boolean>
 }
 
+export interface UseSuspenseQueryResult<TData, TError = Error> {
+  /** Resolved query data — non-nullable inside the rendered subtree (Suspense
+   * absorbed the pending state). */
+  data: TData
+  /** Always `null` past the Suspense gate; errors are thrown to the nearest
+   * `<ErrorBoundary>`. Typed as `TError | null` for consistency with
+   * `useQuery` so the same destructure works in both. */
+  error: TError | null
+  status: 'success'
+  isPending: false
+  isSuccess: true
+  isError: false
+  /** `true` while a background refetch is running. Use for refresh spinners. */
+  isFetching: boolean
+  isPlaceholderData: boolean
+  fetchStatus: FetchStatus
+  refresh: () => void
+}
+
 /**
  * Reads a query for use inside a `<Suspense>` boundary. While the query is
  * pending, throws an inflight promise (queryClient-deduplicated). On error,
- * throws the error — catch with `<ErrorBoundary>`. Returns resolved data.
+ * throws the error — catch with `<ErrorBoundary>`. Returns the same shape as
+ * `useQuery`, but with `data` narrowed to non-nullable `TData` since the
+ * pending state is impossible past the Suspense gate.
  */
 export function useSuspenseQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
-): TData {
+): UseSuspenseQueryResult<TData, TError> {
   // Auto-mount lifecycle so concurrent consumers (useUnit / useQuery) reading
   // the same query through the effector scope stay in sync.
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
+  const refresh = useUnit(query.refresh)
   React.useEffect(() => {
     mount()
     return () => unmount()
@@ -237,13 +259,48 @@ export function useSuspenseQuery<TData, TError = Error>(
     throw observer.fetchOptimistic(observer.options as any)
   }
 
-  return result.data as TData
+  // Read all secondary fields from the observer result, not the effector
+  // stores: stores are only populated after mountFx fires from useEffect,
+  // which on the very first successful render hasn't run yet. The observer
+  // result is always live and consistent.
+  return {
+    data: result.data as TData,
+    error: result.error as TError | null,
+    status: 'success',
+    isPending: false,
+    isSuccess: true,
+    isError: false,
+    isFetching: result.isFetching,
+    isPlaceholderData: result.isPlaceholderData,
+    fetchStatus: result.fetchStatus,
+    refresh,
+  }
+}
+
+export interface UseSuspenseInfiniteQueryResult<TData, TError = Error> {
+  data: TData
+  error: TError | null
+  status: 'success'
+  isPending: false
+  isSuccess: true
+  isError: false
+  isFetching: boolean
+  isPlaceholderData: boolean
+  fetchStatus: FetchStatus
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+  isFetchingNextPage: boolean
+  isFetchingPreviousPage: boolean
+  isFetchNextPageError: boolean
+  isFetchPreviousPageError: boolean
+  refresh: () => void
+  fetchNextPage: () => void
+  fetchPreviousPage: () => void
 }
 
 /**
- * Suspense variant of {@link useInfiniteQuery}. Throws the inflight promise
- * during pending and the error during failure; otherwise returns the
- * `InfiniteData` directly.
+ * Suspense variant of {@link useInfiniteQuery}. Same shape as `useInfiniteQuery`,
+ * with `data` narrowed to non-nullable.
  */
 export function useSuspenseInfiniteQuery<
   TData,
@@ -251,9 +308,12 @@ export function useSuspenseInfiniteQuery<
   TPageParam = unknown,
 >(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
-): TData {
+): UseSuspenseInfiniteQueryResult<TData, TError> {
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
+  const refresh = useUnit(query.refresh)
+  const fetchNextPage = useUnit(query.fetchNextPage)
+  const fetchPreviousPage = useUnit(query.fetchPreviousPage)
   React.useEffect(() => {
     mount()
     return () => unmount()
@@ -276,7 +336,35 @@ export function useSuspenseInfiniteQuery<
     ).fetchOptimistic(observer.options)
   }
 
-  return result.data as TData
+  const r = result as typeof result & {
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+    isFetchingNextPage: boolean
+    isFetchingPreviousPage: boolean
+    isFetchNextPageError: boolean
+    isFetchPreviousPageError: boolean
+  }
+
+  return {
+    data: r.data as TData,
+    error: r.error as TError | null,
+    status: 'success',
+    isPending: false,
+    isSuccess: true,
+    isError: false,
+    isFetching: r.isFetching,
+    isPlaceholderData: r.isPlaceholderData,
+    fetchStatus: r.fetchStatus,
+    hasNextPage: r.hasNextPage,
+    hasPreviousPage: r.hasPreviousPage,
+    isFetchingNextPage: r.isFetchingNextPage,
+    isFetchingPreviousPage: r.isFetchingPreviousPage,
+    isFetchNextPageError: r.isFetchNextPageError,
+    isFetchPreviousPageError: r.isFetchPreviousPageError,
+    refresh,
+    fetchNextPage,
+    fetchPreviousPage,
+  }
 }
 
 /**
@@ -301,6 +389,18 @@ function useSuspenseObserver<
       status: 'pending' | 'success' | 'error'
       data: unknown
       error: unknown
+      isFetching: boolean
+      isPlaceholderData: boolean
+      fetchStatus: FetchStatus
+      // Infinite-query result fields — present at runtime when the underlying
+      // observer is an InfiniteQueryObserver; the suspense hooks narrow as
+      // needed. Typed as `any` here to keep the constraint loose.
+      hasNextPage?: any
+      hasPreviousPage?: any
+      isFetchingNextPage?: any
+      isFetchingPreviousPage?: any
+      isFetchNextPageError?: any
+      isFetchPreviousPageError?: any
     }
     fetchOptimistic(options: any): Promise<unknown>
   },

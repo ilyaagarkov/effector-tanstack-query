@@ -55,7 +55,7 @@ describe('useSuspenseQuery', () => {
     })
 
     function Page() {
-      const data = useSuspenseQuery(query)
+      const { data } = useSuspenseQuery(query)
       return <span>data: {data}</span>
     }
 
@@ -87,7 +87,7 @@ describe('useSuspenseQuery', () => {
     })
 
     function Page() {
-      const data = useSuspenseQuery(query)
+      const { data } = useSuspenseQuery(query)
       return <span>data: {String(data)}</span>
     }
 
@@ -124,7 +124,7 @@ describe('useSuspenseQuery', () => {
     })
 
     function Page() {
-      const data = useSuspenseQuery(query)
+      const { data } = useSuspenseQuery(query)
       return <span>data: {data}</span>
     }
 
@@ -154,7 +154,7 @@ describe('useSuspenseQuery', () => {
     })
 
     function Page() {
-      const data = useSuspenseQuery(query)
+      const { data } = useSuspenseQuery(query)
       return <span>data: {data}</span>
     }
 
@@ -210,7 +210,7 @@ describe('useSuspenseInfiniteQuery', () => {
     })
 
     function Page() {
-      const data = useSuspenseInfiniteQuery(query)
+      const { data } = useSuspenseInfiniteQuery(query)
       return <span>pages: {data.pages.join(',')}</span>
     }
 
@@ -241,7 +241,7 @@ describe('useSuspenseInfiniteQuery', () => {
     })
 
     function Page() {
-      const data = useSuspenseInfiniteQuery(query)
+      const { data } = useSuspenseInfiniteQuery(query)
       return <span>pages: {data.pages.length}</span>
     }
 
