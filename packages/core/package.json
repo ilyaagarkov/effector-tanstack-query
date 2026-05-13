@@ -1,6 +1,6 @@
 {
   "name": "@effector-tanstack-query/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Effector bindings for TanStack Query — core factories (createQuery, createMutation, createInfiniteQuery)",
   "license": "MIT",
   "author": "Ilya Agarkov <ilya.al.ag@gmail.com>",

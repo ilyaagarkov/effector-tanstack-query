@@ -1,6 +1,6 @@
 {
   "name": "@effector-tanstack-query/react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React hooks for @effector-tanstack-query/core — useQuery, useMutation, useInfiniteQuery, useSuspenseQuery, useSuspenseInfiniteQuery",
   "license": "MIT",
   "author": "Ilya Agarkov <ilya.al.ag@gmail.com>",

@@ -72,10 +72,10 @@ importers:
   examples/csr:
     dependencies:
       '@effector-tanstack-query/core':
-        specifier: workspace:*
+        specifier: ^0.1.1
         version: link:../../packages/core
       '@effector-tanstack-query/react':
-        specifier: workspace:*
+        specifier: ^0.1.1
         version: link:../../packages/react
       '@tanstack/query-core':
         specifier: ^5.0.0
@@ -118,10 +118,10 @@ importers:
   examples/ssr:
     dependencies:
       '@effector-tanstack-query/core':
-        specifier: workspace:*
+        specifier: ^0.1.1
         version: link:../../packages/core
       '@effector-tanstack-query/react':
-        specifier: workspace:*
+        specifier: ^0.1.1
         version: link:../../packages/react
       '@tanstack/query-core':
         specifier: ^5.0.0
