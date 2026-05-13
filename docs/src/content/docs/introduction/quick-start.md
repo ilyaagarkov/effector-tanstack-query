@@ -5,28 +5,34 @@ description: Build a query, mount it, and read its data — in two minutes.
 
 ## 1. Set up the QueryClient
 
-The `QueryClient` is the same object used by TanStack Query. Create one and call `.mount()` so it can subscribe to focus / online events.
+The `QueryClient` is the same object used by TanStack Query. Create one and call `.mount()` so it can subscribe to focus / online events. Then register it with `setQueryClient` — factories will use it automatically.
 
 ```ts
 import { QueryClient } from '@tanstack/query-core'
+import { setQueryClient } from '@effector-tanstack-query/core'
 
-export const queryClient = new QueryClient({
+const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 })
 queryClient.mount()
+setQueryClient(queryClient)
 ```
+
+For SSR / per-request isolation, inject the client per scope via `fork({ values: [[$queryClient, queryClient]] })` instead — see [SSR](/effector-tanstack-query/guides/ssr/).
 
 ## 2. Create a query
 
 ```ts
 import { createQuery } from '@effector-tanstack-query/core'
 
-export const userQuery = createQuery(queryClient, {
+export const userQuery = createQuery({
   name: 'user',
   queryKey: ['user', 1],
   queryFn: () => fetch('/api/users/1').then((r) => r.json()),
 })
 ```
+
+> Passing the client explicitly still works: `createQuery(queryClient, options)`.
 
 The `name` is optional but **strongly recommended** — it gives the internal stores stable SIDs so they round-trip via `serialize(scope)` / `fork({ values })` for SSR. ([Why?](/effector-tanstack-query/guides/naming-and-sids/))
 
@@ -52,12 +58,16 @@ userQuery.mounted()             // observer subscribes; query starts fetching
 console.log(userQuery.$data.getState())
 ```
 
-In tests with `fork`:
+In tests with `fork`, inject a fresh client per scope:
 
 ```ts
 import { fork, allSettled } from 'effector'
+import { $queryClient } from '@effector-tanstack-query/core'
 
-const scope = fork()
+const queryClient = new QueryClient()
+queryClient.mount()
+
+const scope = fork({ values: [[$queryClient, queryClient]] })
 await allSettled(userQuery.mounted, { scope })
 expect(scope.getState(userQuery.$data)).toEqual({ id: 1, name: 'Alice' })
 ```
@@ -94,7 +104,7 @@ import { createStore, createEvent } from 'effector'
 const setUserId = createEvent<number>()
 const $userId = createStore(1).on(setUserId, (_, id) => id)
 
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user', $userId],
   queryFn: ({ queryKey }) =>

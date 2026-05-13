@@ -1,12 +1,14 @@
 import {
-  createEffect,
+  attach,
   createEvent,
   createStore,
   sample,
   scopeBind,
 } from 'effector'
+import type { Store } from 'effector'
 import { MutationObserver } from '@tanstack/query-core'
 import type { MutateOptions, QueryClient } from '@tanstack/query-core'
+import { $queryClient } from './queryClient'
 import { sidConfig, warnMissingName } from './createBaseQuery'
 import type { CreateMutationOptions, MutationResult } from './types'
 
@@ -18,12 +20,27 @@ export function createMutation<
   TVariables = void,
   TOnMutateResult = unknown,
 >(
-  queryClient: QueryClient,
-  options: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+  arg1:
+    | QueryClient
+    | CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+  arg2?: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
 ): MutationResult<TData, TError, TVariables> {
+  const [explicitClient, options] = parseMutationArgs<
+    TData,
+    TError,
+    TVariables,
+    TOnMutateResult
+  >(arg1, arg2)
+
   const { name, ...observerOptions } = options
 
   if (!name) warnMissingName('createMutation')
+
+  const $effectiveClient: Store<QueryClient | null> = explicitClient
+    ? createStore(explicitClient as QueryClient | null, {
+        serialize: 'ignore',
+      })
+    : $queryClient
 
   const dataUpdated = createEvent<TData | undefined>()
   const errorUpdated = createEvent<TError | null>()
@@ -59,64 +76,96 @@ export function createMutation<
   const $isError = $status.map((s) => s === 'error')
   const $isIdle = $status.map((s) => s === 'idle')
 
-  const observer = new MutationObserver<
-    TData,
-    TError,
-    TVariables,
-    TOnMutateResult
-  >(queryClient, observerOptions)
+  // Per-scope observer — same pattern as createBaseQuery. Each fork scope
+  // gets its own MutationObserver bound to its scope's QueryClient.
+  type Observer = MutationObserver<TData, TError, TVariables, TOnMutateResult>
+  const $observer = createStore<Observer | null>(null, {
+    serialize: 'ignore',
+  })
+  const observerCreated = createEvent<Observer>()
+  $observer.on(observerCreated, (_, obs) => obs)
 
-  let unsubscribeObserver: (() => void) | undefined
+  const observerSubscriptions = new WeakMap<Observer, () => void>()
 
   const start = createEvent<void>()
   const unmounted = createEvent<void>()
 
-  const startFx = createEffect(() => {
-    const dispatchData = scopeBind(dataUpdated, { safe: true })
-    const dispatchError = scopeBind(errorUpdated, { safe: true })
-    const dispatchStatus = scopeBind(statusUpdated, { safe: true })
-    const dispatchVariables = scopeBind(variablesUpdated, { safe: true })
-    const dispatchIsPaused = scopeBind(isPausedUpdated, { safe: true })
-    const dispatchFinishedSuccess = scopeBind(finishedSuccess, { safe: true })
-    const dispatchFinishedFailure = scopeBind(finishedFailure, { safe: true })
-
-    unsubscribeObserver?.()
-
-    // Track status transitions to emit `finished.success` / `finished.failure`
-    // exactly once per pending → terminal transition. The observer holds at
-    // most one inflight mutation at a time, so a single previous-status flag
-    // is sufficient.
-    let prevStatus: MutationStatus = 'idle'
-
-    unsubscribeObserver = observer.subscribe((result) => {
-      dispatchData(result.data)
-      dispatchError(result.error)
-      dispatchStatus(result.status)
-      dispatchVariables(result.variables)
-      dispatchIsPaused(result.isPaused)
-
-      if (prevStatus === 'pending') {
-        if (result.status === 'success') {
-          dispatchFinishedSuccess({
-            params: result.variables as TVariables,
-            result: result.data as TData,
-          })
-        } else if (result.status === 'error') {
-          dispatchFinishedFailure({
-            params: result.variables as TVariables,
-            error: result.error as TError,
-          })
-        }
+  const startFx = attach({
+    source: { qc: $effectiveClient, observer: $observer },
+    effect: ({ qc, observer: existingObserver }) => {
+      if (!qc) {
+        throw new Error(
+          '[@tanstack/query-effector] No QueryClient is set for createMutation. Call setQueryClient(qc) before start, ' +
+            'pass it to fork({ values: [[$queryClient, qc]] }), or pass it explicitly to the factory.',
+        )
       }
-      prevStatus = result.status
-    })
+
+      const observer =
+        existingObserver ??
+        new MutationObserver<TData, TError, TVariables, TOnMutateResult>(
+          qc,
+          observerOptions,
+        )
+
+      const dispatchData = scopeBind(dataUpdated, { safe: true })
+      const dispatchError = scopeBind(errorUpdated, { safe: true })
+      const dispatchStatus = scopeBind(statusUpdated, { safe: true })
+      const dispatchVariables = scopeBind(variablesUpdated, { safe: true })
+      const dispatchIsPaused = scopeBind(isPausedUpdated, { safe: true })
+      const dispatchFinishedSuccess = scopeBind(finishedSuccess, { safe: true })
+      const dispatchFinishedFailure = scopeBind(finishedFailure, { safe: true })
+
+      observerSubscriptions.get(observer)?.()
+
+      // Track status transitions to emit `finished.success` / `finished.failure`
+      // exactly once per pending → terminal transition. The observer holds at
+      // most one inflight mutation at a time, so a single previous-status flag
+      // is sufficient.
+      let prevStatus: MutationStatus = 'idle'
+
+      const unsubscribe = observer.subscribe((result) => {
+        dispatchData(result.data)
+        dispatchError(result.error)
+        dispatchStatus(result.status)
+        dispatchVariables(result.variables)
+        dispatchIsPaused(result.isPaused)
+
+        if (prevStatus === 'pending') {
+          if (result.status === 'success') {
+            dispatchFinishedSuccess({
+              params: result.variables as TVariables,
+              result: result.data as TData,
+            })
+          } else if (result.status === 'error') {
+            dispatchFinishedFailure({
+              params: result.variables as TVariables,
+              error: result.error as TError,
+            })
+          }
+        }
+        prevStatus = result.status
+      })
+
+      observerSubscriptions.set(observer, unsubscribe)
+
+      return observer
+    },
   })
 
   sample({ clock: start, target: startFx })
+  sample({ clock: startFx.doneData, target: observerCreated })
 
-  const unmountFx = createEffect(() => {
-    unsubscribeObserver?.()
-    unsubscribeObserver = undefined
+  // Mutation observers (unlike query observers) live across mount cycles —
+  // their data state survives unmount and can be observed again on re-start.
+  // Match that by keeping `$observer` populated; we only drop the
+  // subscription so listeners stop receiving updates after unmount.
+  const unmountFx = attach({
+    source: $observer,
+    effect: (observer) => {
+      if (!observer) return
+      observerSubscriptions.get(observer)?.()
+      observerSubscriptions.delete(observer)
+    },
   })
   sample({ clock: unmounted, target: unmountFx })
 
@@ -126,8 +175,12 @@ export function createMutation<
   // (would deadlock under fake timers since observer.mutate awaits the user's
   // mutationFn). Errors are tracked via the observer subscription which
   // updates $error/$status and emits `finished.failure`.
-  const mutateFx = createEffect((variables: TVariables) => {
-    observer.mutate(variables).catch(() => {})
+  const mutateFx = attach({
+    source: $observer,
+    effect: (observer, variables: TVariables) => {
+      if (!observer) return
+      observer.mutate(variables).catch(() => {})
+    },
   })
 
   sample({ clock: mutate, target: mutateFx })
@@ -142,26 +195,35 @@ export function createMutation<
     onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
   }>()
 
-  const mutateWithFx = createEffect(
-    ({
-      variables,
-      ...callbacks
-    }: {
-      variables: TVariables
-      onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
-      onError?: MutateOptions<TData, TError, TVariables>['onError']
-      onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
-    }) => {
+  const mutateWithFx = attach({
+    source: $observer,
+    effect: (
+      observer,
+      {
+        variables,
+        ...callbacks
+      }: {
+        variables: TVariables
+        onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
+        onError?: MutateOptions<TData, TError, TVariables>['onError']
+        onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
+      },
+    ) => {
+      if (!observer) return
       observer.mutate(variables, callbacks).catch(() => {})
     },
-  )
+  })
 
   sample({ clock: mutateWith, target: mutateWithFx })
 
   const reset = createEvent<void>()
 
-  const resetFx = createEffect(() => {
-    observer.reset()
+  const resetFx = attach({
+    source: $observer,
+    effect: (observer) => {
+      if (!observer) return
+      observer.reset()
+    },
   })
 
   sample({ clock: reset, target: resetFx })
@@ -176,6 +238,8 @@ export function createMutation<
     $isSuccess,
     $isError,
     $isIdle,
+    $observer,
+    $queryClient: $effectiveClient,
     mutate,
     mutateWith,
     reset,
@@ -186,4 +250,22 @@ export function createMutation<
       failure: finishedFailure,
     },
   }
+}
+
+function parseMutationArgs<TData, TError, TVariables, TOnMutateResult>(
+  arg1:
+    | QueryClient
+    | CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+  arg2?: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+): [
+  QueryClient | null,
+  CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+] {
+  if (arg2 !== undefined) {
+    return [arg1 as QueryClient, arg2]
+  }
+  return [
+    null,
+    arg1 as CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+  ]
 }

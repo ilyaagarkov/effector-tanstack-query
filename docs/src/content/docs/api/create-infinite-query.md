@@ -6,6 +6,17 @@ description: Create a paginated query with cursor-based or bidirectional paginat
 ```ts
 import { createInfiniteQuery } from '@effector-tanstack-query/core'
 
+// Uses the default $queryClient.
+function createInfiniteQuery<
+  TQueryFnData = unknown,
+  TError = Error,
+  TPageParam = unknown,
+  TData = InfiniteData<TQueryFnData, TPageParam>,
+>(
+  options: CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+): InfiniteQueryResult<TData, TError, TPageParam>
+
+// Explicit client.
 function createInfiniteQuery<
   TQueryFnData = unknown,
   TError = Error,
@@ -53,7 +64,7 @@ In addition to the base `QueryResult` fields:
 ## select
 
 ```ts
-const q = createInfiniteQuery(qc, {
+const q = createInfiniteQuery({
   name: 'items',
   queryKey: ['items'],
   queryFn: ({ pageParam }: { pageParam: number }) => fetchPage(pageParam),

@@ -33,9 +33,9 @@ function App() {
 
 ## How it works
 
-The hook subscribes to the underlying `QueryObserver` via `useSyncExternalStore` and reads its result via `getOptimisticResult` (which goes against the `queryClient` cache, not the observer's notification stream). This means the hook can serve cached data on the very first render without waiting for `useEffect` to run — exactly when `<Suspense>` would otherwise be stuck in fallback.
+The hook reads the per-scope `$observer` via `useUnit`. On the very first render — before `useEffect` has fired and created the scope observer — it constructs a transient `QueryObserver` directly from the active `$queryClient`, so cached data is served without flashing the fallback. Both flavors read from / write to the same `queryClient` cache.
 
-When status is `'pending'`, the hook throws `observer.fetchOptimistic(observer.options)`. This promise resolves with the queryFn result and is **deduplicated by `queryHash`** — multiple suspending consumers of the same key share the inflight request.
+When status is `'pending'`, the hook throws `observer.fetchOptimistic(...)`. This promise resolves with the queryFn result and is **deduplicated by `queryHash`** — multiple suspending consumers of the same key share the inflight request.
 
 ## Cache hits don't suspend
 
@@ -58,7 +58,7 @@ When the key store updates, the observer re-evaluates against the cache:
 const setId = createEvent<number>()
 const $id = createStore(1).on(setId, (_, v) => v)
 
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user', $id],
   queryFn: ({ queryKey }) => fetchUser(queryKey[1] as number),

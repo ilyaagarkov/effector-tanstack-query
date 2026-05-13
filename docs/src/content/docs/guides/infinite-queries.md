@@ -10,7 +10,7 @@ description: Paginated and bidirectional data with createInfiniteQuery, fetchNex
 ```ts
 import { createInfiniteQuery } from '@effector-tanstack-query/core'
 
-const postsQuery = createInfiniteQuery(queryClient, {
+const postsQuery = createInfiniteQuery({
   name: 'posts',
   queryKey: ['posts'],
   queryFn: ({ pageParam }) =>
@@ -43,7 +43,7 @@ In addition to all `QueryResult` fields:
 ## Bidirectional pagination
 
 ```ts
-const chatQuery = createInfiniteQuery(queryClient, {
+const chatQuery = createInfiniteQuery({
   name: 'chat',
   queryKey: ['messages'],
   queryFn: ({ pageParam }) => fetchMessages(pageParam),
@@ -61,7 +61,7 @@ chatQuery.fetchPreviousPage() // newer
 Cap the number of retained pages — older pages are evicted as new ones load:
 
 ```ts
-createInfiniteQuery(queryClient, {
+createInfiniteQuery({
   name: 'feed',
   // ...
   maxPages: 10,
@@ -73,7 +73,7 @@ createInfiniteQuery(queryClient, {
 `select` receives `InfiniteData<TQueryFnData, TPageParam>` and can return any shape:
 
 ```ts
-const postsQuery = createInfiniteQuery(queryClient, {
+const postsQuery = createInfiniteQuery({
   name: 'posts',
   queryKey: ['posts'],
   queryFn: ({ pageParam }: { pageParam: number }) => fetchPage(pageParam),

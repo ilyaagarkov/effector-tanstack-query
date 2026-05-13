@@ -1,6 +1,6 @@
 import {
+  attach,
   combine,
-  createEffect,
   createEvent,
   createStore,
   sample,
@@ -13,6 +13,7 @@ import type {
   QueryKey,
   QueryStatus,
 } from '@tanstack/query-core'
+import { $queryClient } from './queryClient'
 import { resolveEnabled, resolveKey } from './resolve'
 import type { EffectorQueryKey, StoreOrValue } from './types'
 
@@ -41,7 +42,7 @@ export interface BaseObserverResult<TData, TError> {
   isPlaceholderData: boolean
 }
 
-export interface BaseQueryStores<TData, TError> {
+export interface BaseQueryStores<TData, TError, TObserver> {
   $data: Store<TData | undefined>
   $error: Store<TError | null>
   $status: Store<QueryStatus>
@@ -51,6 +52,22 @@ export interface BaseQueryStores<TData, TError> {
   $isError: Store<boolean>
   $isPlaceholderData: Store<boolean>
   $fetchStatus: Store<FetchStatus>
+  /**
+   * Per-scope observer. Populated on first `mounted()` via attach over
+   * `$queryClient` — every fork scope has its own Observer instance bound
+   * to the scope's QueryClient. Read scope-aware via `useUnit($observer)`.
+   */
+  $observer: Store<TObserver | null>
+  /**
+   * Resolved QueryClient store. If the factory was called with an explicit
+   * client, this is a frozen store of that client. Otherwise it's the global
+   * `$queryClient`, which honors `fork({ values })` overrides.
+   */
+  $queryClient: Store<QueryClient | null>
+  /** Internal — used by the React suspense hooks. */
+  $resolvedKey: Store<QueryKey>
+  /** Internal — used by the React suspense hooks. */
+  $enabled: Store<boolean>
   refresh: EventCallable<void>
   mounted: EventCallable<void>
   unmounted: EventCallable<void>
@@ -90,16 +107,23 @@ export function sidConfig(
   }
 }
 
-export interface ExtrasSetup<TResult, TExtraStores> {
+export interface ExtrasSetup<TResult, TObserver, TExtraStores> {
   /** Extra stores/events merged into the final result object. */
   stores: TExtraStores
   /**
-   * Invoked inside the mountFx effect. Must scope-bind any extra events
+   * Invoked inside the mount effect. Must scope-bind any extra events
    * and return a function that dispatches extra fields from the observer
    * result. The returned dispatcher is called on every subscription
    * notification alongside the base dispatcher.
    */
   bindDispatcher: () => (result: TResult) => void
+  /**
+   * Lets a flavor wire its own per-observer effects (e.g.
+   * fetchNextPage / fetchPreviousPage for infinite queries). Receives the
+   * per-scope `$observer` store so the flavor can build attach-based
+   * effects that resolve the observer from the current scope.
+   */
+  setupEffects?: (params: { $observer: Store<TObserver | null> }) => void
 }
 
 export interface CreateBaseQueryConfig<
@@ -109,14 +133,16 @@ export interface CreateBaseQueryConfig<
   TObserver extends BaseObserverLike<TResult>,
   TExtraStores,
 > {
-  /** Build the observer once with an initial key/enabled snapshot. */
-  createObserver: (initial: { queryKey: QueryKey; enabled: boolean }) => TObserver
+  /** Build the observer for the current scope. Receives the resolved client. */
+  createObserver: (
+    queryClient: QueryClient,
+    initial: { queryKey: QueryKey; enabled: boolean },
+  ) => TObserver
   /**
    * Hook for query flavors that need additional stores/events (e.g. infinite
-   * query's hasNextPage, fetchNextPage). Receives the observer for wiring
-   * extra effects such as fetchNextPage.
+   * query's hasNextPage, fetchNextPage). Called once at factory time.
    */
-  setupExtras?: (observer: TObserver) => ExtrasSetup<TResult, TExtraStores>
+  setupExtras?: () => ExtrasSetup<TResult, TObserver, TExtraStores>
 }
 
 export function createBaseQuery<
@@ -126,13 +152,24 @@ export function createBaseQuery<
   TObserver extends BaseObserverLike<TResult>,
   TExtraStores = {},
 >(
-  queryClient: QueryClient,
+  explicitClient: QueryClient | null,
   options: BaseQueryOptions,
   config: CreateBaseQueryConfig<TData, TError, TResult, TObserver, TExtraStores>,
-): BaseQueryStores<TData, TError> & { observer: TObserver } & TExtraStores {
+): BaseQueryStores<TData, TError, TObserver> & TExtraStores {
   const { name } = options
   const $resolvedKey = resolveKey(options.queryKey)
   const $enabled = resolveEnabled(options.enabled)
+
+  // If an explicit client is passed, the factory is locked to it. fork()
+  // values cannot override the captured value because $effectiveClient is a
+  // brand-new store (not the global one). When no explicit client is passed,
+  // we route through $queryClient — which respects fork({ values }) for
+  // per-scope isolation.
+  const $effectiveClient: Store<QueryClient | null> = explicitClient
+    ? createStore(explicitClient as QueryClient | null, {
+        serialize: 'ignore',
+      })
+    : $queryClient
 
   const dataUpdated = createEvent<TData | undefined>()
   const errorUpdated = createEvent<TError | null>()
@@ -169,21 +206,44 @@ export function createBaseQuery<
   const $isSuccess = $status.map((s) => s === 'success')
   const $isError = $status.map((s) => s === 'error')
 
-  const observer = config.createObserver({
-    queryKey: $resolvedKey.getState(),
-    enabled: $enabled.getState(),
+  // Per-scope observer storage. Carries runtime-only references
+  // (subscriptions, callbacks) — must never participate in serialization.
+  const $observer = createStore<TObserver | null>(null, {
+    serialize: 'ignore',
   })
+  const observerCreated = createEvent<TObserver>()
+  $observer.on(observerCreated, (_, obs) => obs)
 
-  const extras = config.setupExtras?.(observer)
+  // Per-observer unsubscribe handles. WeakMap so abandoned observers (e.g.
+  // a scope that was discarded without unmount) are GC'able.
+  const observerSubscriptions = new WeakMap<TObserver, () => void>()
 
-  let unsubscribeObserver: (() => void) | undefined
+  const extras = config.setupExtras?.()
+  extras?.setupEffects?.({ $observer })
 
-  // Runs once per mount. scopeBind({ safe: true }) reliably captures the fork
-  // scope here because this effect is triggered directly from allSettled(mounted).
-  // The bound dispatchers are captured in the observer callback's closure and
-  // reused for all subsequent notifications (including after key/enabled changes).
-  const mountFx = createEffect(
-    ({ key, enabled }: { key: QueryKey; enabled: boolean }) => {
+  // Runs once per mount. Creates the observer for the current scope (if not
+  // yet created) and attaches the subscription. scopeBind({ safe: true })
+  // reliably captures the fork scope here because this effect is triggered
+  // directly from allSettled(mounted). Bound dispatchers are captured in the
+  // observer callback's closure and reused for all subsequent notifications
+  // (including after key/enabled changes).
+  const mountFx = attach({
+    source: { qc: $effectiveClient, observer: $observer },
+    effect: (
+      { qc, observer: existingObserver },
+      { key, enabled }: { key: QueryKey; enabled: boolean },
+    ) => {
+      if (!qc) {
+        throw new Error(
+          '[@tanstack/query-effector] No QueryClient is set. Call setQueryClient(qc) before mounting, ' +
+            'pass it to fork({ values: [[$queryClient, qc]] }), or pass it explicitly to the factory.',
+        )
+      }
+
+      const observer =
+        existingObserver ??
+        config.createObserver(qc, { queryKey: key, enabled })
+
       const dispatchData = scopeBind(dataUpdated, { safe: true })
       const dispatchError = scopeBind(errorUpdated, { safe: true })
       const dispatchStatus = scopeBind(statusUpdated, { safe: true })
@@ -194,7 +254,7 @@ export function createBaseQuery<
       })
       const dispatchExtras = extras?.bindDispatcher()
 
-      unsubscribeObserver?.()
+      observerSubscriptions.get(observer)?.()
       observer.setOptions({ ...observer.options, queryKey: key, enabled })
 
       const dispatch = (result: TResult) => {
@@ -207,21 +267,30 @@ export function createBaseQuery<
         dispatchExtras?.(result)
       }
 
-      unsubscribeObserver = observer.subscribe(dispatch)
+      const unsubscribe = observer.subscribe(dispatch)
+      observerSubscriptions.set(observer, unsubscribe)
 
       // Emit the current state immediately — observer.subscribe() may not
       // fire the callback synchronously when cached data already matches
       // the observer's initial result (e.g. staleTime + setQueryData).
       // This mirrors react-query's getOptimisticResult() on mount.
       dispatch(observer.getCurrentResult())
-    },
-  )
 
-  // Runs when key or enabled changes after mount. Only updates observer options —
-  // no re-binding needed because the observer callback already holds scope-bound
-  // dispatchers from mountFx.
-  const updateObserverFx = createEffect(
-    ({ key, enabled }: { key: QueryKey; enabled: boolean }) => {
+      return observer
+    },
+  })
+
+  sample({ clock: mountFx.doneData, target: observerCreated })
+
+  // Runs when key or enabled changes after mount. Only updates observer
+  // options — subscription + dispatchers were already wired in mountFx.
+  const updateObserverFx = attach({
+    source: $observer,
+    effect: (
+      observer,
+      { key, enabled }: { key: QueryKey; enabled: boolean },
+    ) => {
+      if (!observer) return
       // Strip _defaulted and queryHash so defaultQueryOptions() recomputes
       // the hash for the new key. Without this, the old hash is preserved and
       // QueryObserver#updateQuery() finds the old query — no key switch, no fetch.
@@ -235,7 +304,7 @@ export function createBaseQuery<
       }
       observer.setOptions({ ...baseOptions, queryKey: key, enabled })
     },
-  )
+  })
 
   const mounted = createEvent<void>()
   const unmounted = createEvent<void>()
@@ -258,17 +327,32 @@ export function createBaseQuery<
     target: updateObserverFx,
   })
 
-  const unmountFx = createEffect(() => {
-    unsubscribeObserver?.()
-    unsubscribeObserver = undefined
-    observer.destroy()
+  // Single effect: tear down subscription + destroy + clear $observer.
+  // Doing all three in one effect avoids ordering ambiguity vs. separate
+  // events that all sample from `unmounted`.
+  const observerDestroyed = createEvent<void>()
+  $observer.on(observerDestroyed, () => null)
+
+  const unmountFx = attach({
+    source: $observer,
+    effect: (observer) => {
+      if (!observer) return
+      observerSubscriptions.get(observer)?.()
+      observerSubscriptions.delete(observer)
+      observer.destroy()
+    },
   })
   sample({ clock: unmounted, target: unmountFx })
+  sample({ clock: unmountFx.finally, target: observerDestroyed })
 
   const refresh = createEvent<void>()
-  const refreshFx = createEffect(() =>
-    queryClient.invalidateQueries({ queryKey: observer.options.queryKey }),
-  )
+  const refreshFx = attach({
+    source: { qc: $effectiveClient, key: $resolvedKey },
+    effect: ({ qc, key }) => {
+      if (!qc) return
+      return qc.invalidateQueries({ queryKey: key })
+    },
+  })
   sample({ clock: refresh, target: refreshFx })
 
   return {
@@ -281,10 +365,13 @@ export function createBaseQuery<
     $isError,
     $isPlaceholderData,
     $fetchStatus,
+    $observer,
+    $queryClient: $effectiveClient,
+    $resolvedKey,
+    $enabled,
     refresh,
     mounted,
     unmounted,
-    observer,
     ...(extras?.stores ?? ({} as TExtraStores)),
   }
 }

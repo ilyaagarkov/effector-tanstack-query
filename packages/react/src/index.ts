@@ -159,24 +159,36 @@ export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   return { ...state, refresh, fetchNextPage, fetchPreviousPage }
 }
 
-// Suspense data path: read from the observer directly (queryClient-backed)
-// instead of through the effector scope. The scope mount chain runs in
-// useEffect, which is skipped while a component is suspended — so on the very
-// first render we need synchronous access to the observer's promise. The
-// mount/unmount effect is still wired up so that other consumers reading the
-// same query through `useUnit` / `useQuery` see updates in scope state.
+// Suspense data path: read from a per-scope observer.
+//
+// The scope mount chain runs in useEffect, which is skipped while a component
+// is suspended — so on the very first render the scope's `$observer` may be
+// null. To get synchronous access to the observer's promise during suspense,
+// we construct a transient observer via the factory's hidden
+// `__createObserver(qc, { queryKey, enabled })` helper. The transient observer
+// reads from / writes to the same queryClient cache as the eventual scope
+// observer (which is created when mountFx runs after useEffect commits).
+//
+// The mount/unmount effect is still wired up so that other consumers reading
+// the same query through `useUnit` / `useQuery` see updates in scope state.
 
-// Subscribe to observer notifications via a forced re-render. observer.subscribe
-// must run in useEffect (post-commit), so we rely on getOptimisticResult — which
-// reads queryClient cache directly — to surface freshly-fetched data on the
-// re-render that follows a Suspense resolution (where useEffect hasn't run yet).
 function useObserverRerender(
-  observer: { subscribe: (cb: () => void) => () => void },
+  observer: { subscribe: (cb: () => void) => () => void } | null,
 ): void {
   const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
   React.useEffect(() => {
+    if (!observer) return
     return observer.subscribe(forceRender)
   }, [observer])
+}
+
+interface SuspenseFactory<TObserver> {
+  __createObserver(
+    qc: import('@tanstack/query-core').QueryClient,
+    init: { queryKey: unknown; enabled: boolean },
+  ): TObserver
+  __resolvedKey: import('effector').Store<unknown>
+  __enabled: import('effector').Store<boolean>
 }
 
 /**
@@ -187,8 +199,6 @@ function useObserverRerender(
 export function useSuspenseQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
 ): TData {
-  const { observer } = query
-
   // Auto-mount lifecycle so concurrent consumers (useUnit / useQuery) reading
   // the same query through the effector scope stay in sync.
   const mount = useUnit(query.mounted)
@@ -197,6 +207,8 @@ export function useSuspenseQuery<TData, TError = Error>(
     mount()
     return () => unmount()
   }, [mount, unmount])
+
+  const observer = useSuspenseObserver(query)
 
   useObserverRerender(observer)
 
@@ -222,8 +234,6 @@ export function useSuspenseInfiniteQuery<
 >(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
 ): TData {
-  const { observer } = query
-
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
   React.useEffect(() => {
@@ -231,18 +241,81 @@ export function useSuspenseInfiniteQuery<
     return () => unmount()
   }, [mount, unmount])
 
+  const observer = useSuspenseObserver(query)
+
   useObserverRerender(observer)
 
   const result = observer.getOptimisticResult(observer.options as any)
 
   if (result.status === 'error') throw result.error
   if (result.status === 'pending') {
-    throw (observer as unknown as {
-      fetchOptimistic: (
-        options: typeof observer.options,
-      ) => Promise<unknown>
-    }).fetchOptimistic(observer.options)
+    throw (
+      observer as unknown as {
+        fetchOptimistic: (
+          options: typeof observer.options,
+        ) => Promise<unknown>
+      }
+    ).fetchOptimistic(observer.options)
   }
 
   return result.data as TData
+}
+
+/**
+ * Resolves a per-scope observer for suspense usage. Prefers the scope's
+ * `$observer` (set by mountFx); falls back to a transient observer
+ * constructed via `__createObserver` so that the very first render — before
+ * useEffect has fired — has a working observer. Both flavors read/write the
+ * same queryClient cache, so the transient observer is a thin wrapper.
+ */
+function useSuspenseObserver<
+  TQuery extends {
+    $observer: import('effector').Store<TObserver | null>
+    $queryClient: import('effector').Store<
+      import('@tanstack/query-core').QueryClient | null
+    >
+  },
+  TObserver extends {
+    options: { queryKey: unknown }
+    setOptions(options: any): void
+    subscribe(cb: () => void): () => void
+    getOptimisticResult(options: any): {
+      status: 'pending' | 'success' | 'error'
+      data: unknown
+      error: unknown
+    }
+    fetchOptimistic(options: any): Promise<unknown>
+  },
+>(query: TQuery): TObserver {
+  const factory = query as unknown as TQuery & SuspenseFactory<TObserver>
+  const observerInScope = useUnit(query.$observer) as TObserver | null
+  const qc = useUnit(query.$queryClient)
+  const queryKey = useUnit(factory.__resolvedKey)
+  const enabled = useUnit(factory.__enabled)
+
+  // Memoize a transient observer keyed by qc, so it survives across renders
+  // while the scope observer is null. Once observerInScope appears, we
+  // switch — the transient one is unsubscribed and abandoned (it never
+  // subscribed to queryCache, so there is nothing to leak).
+  const transient = React.useMemo(() => {
+    if (observerInScope || !qc) return null
+    return factory.__createObserver(qc, { queryKey, enabled })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [observerInScope, qc, factory])
+
+  // Keep the transient observer's options in sync with reactive key/enabled,
+  // so re-suspending on key changes still works through it.
+  React.useEffect(() => {
+    if (!transient) return
+    transient.setOptions({ ...transient.options, queryKey, enabled })
+  }, [transient, queryKey, enabled])
+
+  const observer = observerInScope ?? transient
+  if (!observer) {
+    throw new Error(
+      '[@effector-tanstack-query/react] useSuspenseQuery: no QueryClient is set. ' +
+        'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
+    )
+  }
+  return observer
 }

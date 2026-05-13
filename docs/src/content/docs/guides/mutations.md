@@ -10,7 +10,7 @@ A mutation models a single side effect (POST / PUT / DELETE) and exposes the res
 ```ts
 import { createMutation } from '@effector-tanstack-query/core'
 
-const addTodo = createMutation(queryClient, {
+const addTodo = createMutation({
   name: 'addTodo',
   mutationFn: (text: string) =>
     fetch('/api/todos', {
@@ -67,22 +67,19 @@ Per-call callbacks fire **in addition to** observer-level ones (`onSuccess` in `
 `onMutate` runs **before** the mutationFn and can return a context that flows to `onSuccess`, `onError`, and `onSettled`:
 
 ```ts
-const updateUser = createMutation<User, Error, User, { snapshot: User }>(
-  queryClient,
-  {
-    name: 'updateUser',
-    mutationFn: putUser,
-    onMutate: (newUser) => {
-      const snapshot = queryClient.getQueryData(['user', newUser.id]) as User
-      queryClient.setQueryData(['user', newUser.id], newUser) // optimistic update
-      return { snapshot }
-    },
-    onError: (_err, _vars, context) => {
-      if (context) queryClient.setQueryData(['user', context.snapshot.id], context.snapshot)
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['user'] }),
+const updateUser = createMutation<User, Error, User, { snapshot: User }>({
+  name: 'updateUser',
+  mutationFn: putUser,
+  onMutate: (newUser) => {
+    const snapshot = queryClient.getQueryData(['user', newUser.id]) as User
+    queryClient.setQueryData(['user', newUser.id], newUser) // optimistic update
+    return { snapshot }
   },
-)
+  onError: (_err, _vars, context) => {
+    if (context) queryClient.setQueryData(['user', context.snapshot.id], context.snapshot)
+  },
+  onSettled: () => queryClient.invalidateQueries({ queryKey: ['user'] }),
+})
 ```
 
 The 4th generic `TOnMutateResult` types the context throughout.

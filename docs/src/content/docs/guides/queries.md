@@ -3,7 +3,7 @@ title: Queries
 description: Reactive query keys, enabled, select, placeholderData, polling, and dependent queries.
 ---
 
-A query is created with `createQuery(queryClient, options)`. It returns an object of effector stores and events.
+A query is created with `createQuery(options)` (the registered default `QueryClient` is used) or `createQuery(queryClient, options)` (explicit client). It returns an object of effector stores and events.
 
 ## Reactive query keys
 
@@ -12,7 +12,7 @@ Anywhere in `queryKey`, you can use a `Store` instead of a plain value. The quer
 ```ts
 const $userId = createStore(1)
 
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user', $userId],
   queryFn: ({ queryKey }) => fetchUser(queryKey[1] as number),
@@ -31,7 +31,7 @@ queryKey: ['posts', 42, $section, { sort: 'asc' }]
 
 ```ts
 // Static
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user'],
   queryFn: fetchUser,
@@ -41,7 +41,7 @@ const userQuery = createQuery(queryClient, {
 // Reactive
 const $isLoggedIn = createStore(false)
 
-const profileQuery = createQuery(queryClient, {
+const profileQuery = createQuery({
   name: 'profile',
   queryKey: ['profile'],
   queryFn: fetchProfile,
@@ -54,13 +54,13 @@ const profileQuery = createQuery(queryClient, {
 Use one query's `$isSuccess` as another's `enabled`:
 
 ```ts
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user'],
   queryFn: fetchUser,
 })
 
-const postsQuery = createQuery(queryClient, {
+const postsQuery = createQuery({
   name: 'user-posts',
   queryKey: ['posts'],
   queryFn: fetchPosts,
@@ -73,7 +73,7 @@ const postsQuery = createQuery(queryClient, {
 `select` runs after the queryFn and narrows the displayed `TData` type:
 
 ```ts
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user'],
   queryFn: () => fetchUser(), // returns { id, name, email, role }
@@ -90,7 +90,7 @@ Show data while the new key is loading:
 ```ts
 import { keepPreviousData } from '@tanstack/query-core'
 
-const todosQuery = createQuery(queryClient, {
+const todosQuery = createQuery({
   name: 'todos',
   queryKey: ['todos', $page],
   queryFn: ({ queryKey }) => fetchTodos(queryKey[1]),
@@ -112,7 +112,7 @@ placeholderData: (prev) => prev,
 ## Polling with refetchInterval
 
 ```ts
-const statusQuery = createQuery(queryClient, {
+const statusQuery = createQuery({
   name: 'status',
   queryKey: ['status'],
   queryFn: fetchStatus,
@@ -134,7 +134,7 @@ refetchInterval: (q) => {
 All three accept `boolean | 'always' | (query) => boolean | 'always'` and behave exactly as in TanStack Query. Defaults: `true` for mount/focus/reconnect.
 
 ```ts
-createQuery(queryClient, {
+createQuery({
   name: 'auth',
   queryKey: ['auth'],
   queryFn: fetchAuth,

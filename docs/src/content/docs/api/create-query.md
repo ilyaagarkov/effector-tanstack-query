@@ -6,6 +6,13 @@ description: Create a query bound to a QueryClient and exposed as effector store
 ```ts
 import { createQuery } from '@effector-tanstack-query/core'
 
+// Uses the default $queryClient (set via setQueryClient / fork values).
+function createQuery<TQueryFnData, TError = Error, TData = TQueryFnData>(
+  options: CreateQueryOptions<TQueryFnData, TError, TData>,
+): QueryResult<TData, TError>
+
+// Explicit client — locks the factory to this client; fork({ values })
+// overrides of $queryClient do not apply.
 function createQuery<TQueryFnData, TError = Error, TData = TQueryFnData>(
   queryClient: QueryClient,
   options: CreateQueryOptions<TQueryFnData, TError, TData>,
@@ -47,13 +54,14 @@ type EffectorQueryKey = ReadonlyArray<
 | `mounted`            | `EventCallable<void>`                         | Subscribe observer                       |
 | `unmounted`          | `EventCallable<void>`                         | Unsubscribe + cancel inflight            |
 | `refresh`            | `EventCallable<void>`                         | Invalidate + refetch                     |
-| `observer`           | `QueryObserver<TData, TError>`                | Underlying observer (advanced use)       |
+| `$observer`          | `Store<QueryObserver<TData, TError> \| null>` | Per-scope observer (created on `mounted()`) |
+| `$queryClient`       | `Store<QueryClient \| null>`                  | Resolved client for this query           |
 
 ## Generic inference
 
 ```ts
 // TQueryFnData inferred from queryFn
-const q1 = createQuery(qc, {
+const q1 = createQuery({
   name: 'q1',
   queryKey: ['x'],
   queryFn: () => Promise.resolve({ id: 1, name: 'A' }),
@@ -61,7 +69,7 @@ const q1 = createQuery(qc, {
 // q1.$data: Store<{ id: number; name: string } | undefined>
 
 // TData narrowed via select
-const q2 = createQuery(qc, {
+const q2 = createQuery({
   name: 'q2',
   queryKey: ['x'],
   queryFn: () => Promise.resolve({ id: 1, name: 'A' }),
@@ -75,6 +83,6 @@ Custom error type:
 ```ts
 class HttpError extends Error { code = 0 }
 
-const q = createQuery<User, HttpError>(qc, { /* ... */ })
+const q = createQuery<User, HttpError>({ /* ... */ })
 // q.$error: Store<HttpError | null>
 ```

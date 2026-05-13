@@ -6,6 +6,17 @@ description: Create a mutation bound to a QueryClient with sample-friendly finis
 ```ts
 import { createMutation } from '@effector-tanstack-query/core'
 
+// Uses the default $queryClient.
+function createMutation<
+  TData = unknown,
+  TError = Error,
+  TVariables = void,
+  TOnMutateResult = unknown,
+>(
+  options: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+): MutationResult<TData, TError, TVariables>
+
+// Explicit client.
 function createMutation<
   TData = unknown,
   TError = Error,
@@ -53,6 +64,8 @@ function createMutation<
 | `start`      | `EventCallable<void>`                              | Subscribe observer                       |
 | `unmounted`  | `EventCallable<void>`                              | Unsubscribe (allows gcTime cleanup)      |
 | `finished`   | `{ success: Event<{ params; result }>; failure: Event<{ params; error }> }` | Sample-friendly outcome events |
+| `$observer`  | `Store<MutationObserver \| null>`                  | Per-scope observer (created on `start()`) |
+| `$queryClient` | `Store<QueryClient \| null>`                     | Resolved client for this mutation        |
 
 ## `finished` events
 

@@ -18,7 +18,7 @@ In application code, SIDs are usually injected automatically by `effector/babel-
 When you pass `name`, this library assigns SIDs and human-readable names to every internal store using a deterministic prefix:
 
 ```ts
-createQuery(queryClient, {
+createQuery({
   name: 'userQuery',
   queryKey: ['user'],
   queryFn: fetchUser,
@@ -59,11 +59,11 @@ Behavior without `name`:
 
 ```ts
 // Good — explicit, stable names
-const userQuery = createQuery(qc, { name: 'user', queryKey: ['user'], queryFn })
-const settingsQuery = createQuery(qc, { name: 'settings', queryKey: ['settings'], queryFn })
-const addTodo = createMutation(qc, { name: 'addTodo', mutationFn })
+const userQuery = createQuery({ name: 'user', queryKey: ['user'], queryFn })
+const settingsQuery = createQuery({ name: 'settings', queryKey: ['settings'], queryFn })
+const addTodo = createMutation({ name: 'addTodo', mutationFn })
 
 // Avoid — would collide if reused
-const a = createQuery(qc, { name: 'q', queryKey: ['x'], queryFn })
-const b = createQuery(qc, { name: 'q', queryKey: ['y'], queryFn }) // ⚠️ same SID prefix
+const a = createQuery({ name: 'q', queryKey: ['x'], queryFn })
+const b = createQuery({ name: 'q', queryKey: ['y'], queryFn }) // ⚠️ same SID prefix
 ```

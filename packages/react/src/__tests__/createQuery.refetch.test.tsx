@@ -41,8 +41,8 @@ describe('createQuery — refetch with cancelRefetch', () => {
     query.mounted()
     await vi.advanceTimersByTimeAsync(0)
 
-    void query.observer.refetch()
-    void query.observer.refetch({ cancelRefetch: false })
+    void query.$observer.getState()!.refetch()
+    void query.$observer.getState()!.refetch({ cancelRefetch: false })
     await vi.advanceTimersByTimeAsync(15)
 
     // Second call ignored — first refetch still in flight
@@ -68,8 +68,8 @@ describe('createQuery — refetch with cancelRefetch', () => {
     query.mounted()
     await vi.advanceTimersByTimeAsync(0)
 
-    void query.observer.refetch()
-    void query.observer.refetch()
+    void query.$observer.getState()!.refetch()
+    void query.$observer.getState()!.refetch()
     await vi.advanceTimersByTimeAsync(15)
 
     // First fetch cancelled, second ran
@@ -91,7 +91,7 @@ describe('createQuery — refetch with cancelRefetch', () => {
     })
 
     query.mounted()
-    void query.observer.refetch()
+    void query.$observer.getState()!.refetch()
     await vi.advanceTimersByTimeAsync(15)
 
     // Initial fetch + manual refetch dedupe down to single inflight

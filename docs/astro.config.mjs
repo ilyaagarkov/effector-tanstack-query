@@ -32,6 +32,7 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
+            { label: 'QueryClient', slug: 'guides/query-client' },
             { label: 'Queries', slug: 'guides/queries' },
             { label: 'Mutations', slug: 'guides/mutations' },
             { label: 'Infinite queries', slug: 'guides/infinite-queries' },

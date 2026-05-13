@@ -5,7 +5,9 @@ import type {
   InfiniteQueryObserver,
   InfiniteQueryObserverOptions,
   MutateOptions,
+  MutationObserver,
   MutationObserverOptions,
+  QueryClient,
   QueryKey,
   QueryObserver,
   QueryObserverOptions,
@@ -84,11 +86,18 @@ export interface QueryResult<TData, TError = Error> {
    */
   unmounted: EventCallable<void>
   /**
-   * Underlying QueryObserver. Exposed for advanced integrations such as
-   * `useSuspenseQuery`, which needs access to `observer.options` to drive
-   * `queryClient.fetchQuery()` synchronously during render.
+   * Per-scope observer store. Each fork scope has its own Observer instance,
+   * created lazily on `mounted()` and bound to that scope's QueryClient.
+   * Read scope-aware via `useUnit($observer)`. For tests, prefer
+   * `scope.getState($observer)` over reading the default scope state.
    */
-  observer: QueryObserver<TData, TError>
+  $observer: Store<QueryObserver<TData, TError> | null>
+  /**
+   * The QueryClient store this query is bound to. Frozen if a client was
+   * passed explicitly to the factory; otherwise points at the global
+   * `$queryClient` and honors `fork({ values: [[$queryClient, qc]] })`.
+   */
+  $queryClient: Store<QueryClient | null>
 }
 
 export interface CreateInfiniteQueryOptions<
@@ -141,14 +150,12 @@ export interface InfiniteQueryResult<
   refresh: EventCallable<void>
   mounted: EventCallable<void>
   unmounted: EventCallable<void>
-  /** See {@link QueryResult.observer}. */
-  observer: InfiniteQueryObserver<
-    any,
-    TError,
-    TData,
-    QueryKey,
-    TPageParam
+  /** See {@link QueryResult.$observer}. */
+  $observer: Store<
+    InfiniteQueryObserver<any, TError, TData, QueryKey, TPageParam> | null
   >
+  /** See {@link QueryResult.$queryClient}. */
+  $queryClient: Store<QueryClient | null>
 }
 
 export type CreateMutationOptions<
@@ -186,6 +193,10 @@ export interface MutationResult<
   $isError: Store<boolean>
   /** `true` when the mutation has not yet been triggered */
   $isIdle: Store<boolean>
+  /** Per-scope MutationObserver. Created on `start()`. See {@link QueryResult.$observer}. */
+  $observer: Store<MutationObserver<TData, TError, TVariables, any> | null>
+  /** See {@link QueryResult.$queryClient}. */
+  $queryClient: Store<QueryClient | null>
   /** Triggers the mutation with the given variables */
   mutate: EventCallable<TVariables>
   /**

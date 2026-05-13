@@ -1,4 +1,4 @@
-import { createEffect, createEvent, createStore, sample, scopeBind } from 'effector'
+import { attach, createEvent, createStore, sample, scopeBind } from 'effector'
 import { InfiniteQueryObserver } from '@tanstack/query-core'
 import type {
   InfiniteData,
@@ -6,7 +6,10 @@ import type {
   QueryKey,
 } from '@tanstack/query-core'
 import { createBaseQuery, sidConfig, warnMissingName } from './createBaseQuery'
-import type { CreateInfiniteQueryOptions, InfiniteQueryResult } from './types'
+import type {
+  CreateInfiniteQueryOptions,
+  InfiniteQueryResult,
+} from './types'
 
 type Observer<TQueryFnData, TError, TData, TPageParam> = InfiniteQueryObserver<
   TQueryFnData,
@@ -26,9 +29,34 @@ export function createInfiniteQuery<
   TPageParam = unknown,
   TData = InfiniteData<TQueryFnData, TPageParam>,
 >(
+  options: CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+): InfiniteQueryResult<TData, TError, TPageParam>
+export function createInfiniteQuery<
+  TQueryFnData = unknown,
+  TError = Error,
+  TPageParam = unknown,
+  TData = InfiniteData<TQueryFnData, TPageParam>,
+>(
   queryClient: QueryClient,
   options: CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+): InfiniteQueryResult<TData, TError, TPageParam>
+export function createInfiniteQuery<
+  TQueryFnData = unknown,
+  TError = Error,
+  TPageParam = unknown,
+  TData = InfiniteData<TQueryFnData, TPageParam>,
+>(
+  arg1:
+    | QueryClient
+    | CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+  arg2?: CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
 ): InfiniteQueryResult<TData, TError, TPageParam> {
+  const [explicitClient, options] = parseInfiniteArgs<
+    TQueryFnData,
+    TError,
+    TPageParam,
+    TData
+  >(arg1, arg2)
   const { queryKey, enabled, name, ...restOptions } = options
 
   if (!name) warnMissingName('createInfiniteQuery')
@@ -49,22 +77,22 @@ export function createInfiniteQuery<
       fetchPreviousPage: ReturnType<typeof createEvent<void>>
     }
   >(
-    queryClient,
+    explicitClient,
     { queryKey, enabled, name },
     {
-      createObserver: ({ queryKey: key, enabled: isEnabled }) =>
+      createObserver: (qc, { queryKey: key, enabled: isEnabled }) =>
         new InfiniteQueryObserver<
           TQueryFnData,
           TError,
           TData,
           QueryKey,
           TPageParam
-        >(queryClient, {
+        >(qc, {
           ...restOptions,
           queryKey: key,
           enabled: isEnabled,
         } as any),
-      setupExtras: (observer) => {
+      setupExtras: () => {
         const hasNextPageUpdated = createEvent<boolean>()
         const hasPreviousPageUpdated = createEvent<boolean>()
         const isFetchingNextPageUpdated = createEvent<boolean>()
@@ -92,16 +120,7 @@ export function createInfiniteQuery<
         }).on(isFetchPreviousPageErrorUpdated, (_, v) => v)
 
         const fetchNextPage = createEvent<void>()
-        const fetchNextPageFx = createEffect(() => {
-          observer.fetchNextPage()
-        })
-        sample({ clock: fetchNextPage, target: fetchNextPageFx })
-
         const fetchPreviousPage = createEvent<void>()
-        const fetchPreviousPageFx = createEffect(() => {
-          observer.fetchPreviousPage()
-        })
-        sample({ clock: fetchPreviousPage, target: fetchPreviousPageFx })
 
         return {
           stores: {
@@ -113,6 +132,27 @@ export function createInfiniteQuery<
             $isFetchPreviousPageError,
             fetchNextPage,
             fetchPreviousPage,
+          },
+          // Wire fetchNextPage / fetchPreviousPage as scope-aware effects via
+          // attach over $observer — same pattern as the rest of createBaseQuery.
+          setupEffects: ({ $observer }) => {
+            const fetchNextPageFx = attach({
+              source: $observer,
+              effect: (observer) => {
+                if (!observer) return
+                observer.fetchNextPage()
+              },
+            })
+            sample({ clock: fetchNextPage, target: fetchNextPageFx })
+
+            const fetchPreviousPageFx = attach({
+              source: $observer,
+              effect: (observer) => {
+                if (!observer) return
+                observer.fetchPreviousPage()
+              },
+            })
+            sample({ clock: fetchPreviousPage, target: fetchPreviousPageFx })
           },
           bindDispatcher: () => {
             const dispatchHasNextPage = scopeBind(hasNextPageUpdated, {
@@ -152,7 +192,7 @@ export function createInfiniteQuery<
     },
   )
 
-  return {
+  const result: InfiniteQueryResult<TData, TError, TPageParam> = {
     $data: base.$data,
     $error: base.$error,
     $status: base.$status,
@@ -168,11 +208,56 @@ export function createInfiniteQuery<
     $isFetchingPreviousPage: base.$isFetchingPreviousPage,
     $isFetchNextPageError: base.$isFetchNextPageError,
     $isFetchPreviousPageError: base.$isFetchPreviousPageError,
+    $observer: base.$observer,
+    $queryClient: base.$queryClient,
     fetchNextPage: base.fetchNextPage,
     fetchPreviousPage: base.fetchPreviousPage,
     refresh: base.refresh,
     mounted: base.mounted,
     unmounted: base.unmounted,
-    observer: base.observer,
   }
+
+  Object.defineProperty(result, '__createObserver', {
+    enumerable: false,
+    value: (qc: QueryClient, init: { queryKey: any; enabled: boolean }) =>
+      new InfiniteQueryObserver<
+        TQueryFnData,
+        TError,
+        TData,
+        QueryKey,
+        TPageParam
+      >(qc, {
+        ...restOptions,
+        queryKey: init.queryKey,
+        enabled: init.enabled,
+      } as any),
+  })
+  Object.defineProperty(result, '__resolvedKey', {
+    enumerable: false,
+    value: base.$resolvedKey,
+  })
+  Object.defineProperty(result, '__enabled', {
+    enumerable: false,
+    value: base.$enabled,
+  })
+
+  return result
+}
+
+function parseInfiniteArgs<TQueryFnData, TError, TPageParam, TData>(
+  arg1:
+    | QueryClient
+    | CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+  arg2?: CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+): [
+  QueryClient | null,
+  CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+] {
+  if (arg2 !== undefined) {
+    return [arg1 as QueryClient, arg2]
+  }
+  return [
+    null,
+    arg1 as CreateInfiniteQueryOptions<TQueryFnData, TError, TPageParam, TData>,
+  ]
 }

@@ -38,16 +38,17 @@ import { Card, CardGrid } from '@astrojs/starlight/components'
 
 ```ts
 import { QueryClient } from '@tanstack/query-core'
-import { createQuery } from '@effector-tanstack-query/core'
+import { setQueryClient, createQuery } from '@effector-tanstack-query/core'
 import { createStore, createEvent } from 'effector'
 
 const queryClient = new QueryClient()
 queryClient.mount()
+setQueryClient(queryClient)
 
 const setUserId = createEvent<number>()
 const $userId = createStore(1).on(setUserId, (_, id) => id)
 
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user',
   queryKey: ['user', $userId],
   queryFn: ({ queryKey }) => fetch(`/api/users/${queryKey[1]}`).then((r) => r.json()),

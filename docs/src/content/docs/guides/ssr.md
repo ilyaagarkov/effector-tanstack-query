@@ -12,15 +12,20 @@ You need both for a clean hydration with no flash and no extra refetch.
 
 ## Server
 
+Create a fresh `QueryClient` **per request** and inject it through the
+`$queryClient` store via `fork({ values })`. Each request gets its own
+scope-isolated observer — nothing leaks between requests.
+
 ```ts
 import { QueryClient, dehydrate } from '@tanstack/query-core'
 import { fork, allSettled, serialize } from 'effector'
+import { $queryClient } from '@effector-tanstack-query/core'
 
 export async function renderPage() {
   const queryClient = new QueryClient()
-  queryClient.mount()
+  // queryClient.mount() is intentionally NOT called on the server.
 
-  const scope = fork()
+  const scope = fork({ values: [[$queryClient, queryClient]] })
 
   // Mount queries — fetches happen in this scope
   await allSettled(userQuery.mounted, { scope })
@@ -45,6 +50,7 @@ export async function renderPage() {
 ```ts
 import { QueryClient, hydrate } from '@tanstack/query-core'
 import { fork, allSettled } from 'effector'
+import { setQueryClient } from '@effector-tanstack-query/core'
 
 const queryClient = new QueryClient()
 queryClient.mount()
@@ -52,12 +58,17 @@ hydrate(queryClient, window.__QC__)
 
 const scope = fork({ values: window.__SCOPE__ })
 
+// Set the per-scope client via the event (fires inside the scope only).
+await allSettled(setQueryClient, { scope, params: queryClient })
+
 // Mount the query in the hydrated scope —
 // observer reads from cache, no refetch when staleTime keeps it fresh
 await allSettled(userQuery.mounted, { scope })
 
 // Render React tree with <Provider value={scope}>...
 ```
+
+> For single-scope client apps you can also call `setQueryClient(queryClient)` once outside of any scope (after `hydrate`) and skip the `allSettled` call.
 
 ## Why both layers
 
@@ -76,7 +87,7 @@ Together they're equivalent to react-query's `<HydrationBoundary>`.
 Effector stores serialize via **stable IDs** (SIDs). Without a `name` on `createQuery` / `createMutation` / `createInfiniteQuery`, the internal stores have no SID and are silently dropped from `serialize(scope)` — your client-side scope receives nothing.
 
 ```ts
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'user', // ← required for SSR-via-scope
   queryKey: ['user', $userId],
   queryFn: fetchUser,
@@ -90,7 +101,7 @@ A development warning fires the first time you create a query without a `name`. 
 If `staleTime: 0` (the default), the observer on the client refetches immediately after hydration even with cached data. To use the SSR-shipped data without an immediate refetch:
 
 ```ts
-createQuery(queryClient, {
+createQuery({
   name: 'user',
   queryKey: ['user'],
   queryFn: fetchUser,

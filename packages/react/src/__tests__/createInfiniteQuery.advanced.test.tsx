@@ -51,9 +51,9 @@ describe('createInfiniteQuery — fetchNextPage cancellation', () => {
     query.mounted()
     await vi.advanceTimersByTimeAsync(51)
 
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(10)
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(60)
 
     // First fetchNextPage was cancelled, then second ran
@@ -81,9 +81,9 @@ describe('createInfiniteQuery — fetchNextPage cancellation', () => {
     await vi.advanceTimersByTimeAsync(51)
     expect(query.$data.getState()?.pages).toEqual([10])
 
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(10)
-    void query.observer.fetchNextPage({ cancelRefetch: false })
+    void query.$observer.getState()!.fetchNextPage({ cancelRefetch: false })
     await vi.advanceTimersByTimeAsync(60)
 
     // First fetch was NOT cancelled
@@ -233,10 +233,10 @@ describe('createInfiniteQuery — hasNextPage edge cases', () => {
     query.mounted()
     await vi.advanceTimersByTimeAsync(6)
 
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(6)
 
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(6)
 
     // getNextPageParam saw progressively-larger allPages arrays
@@ -308,9 +308,9 @@ describe('createInfiniteQuery — multi-page refetch', () => {
     query.mounted()
     await vi.advanceTimersByTimeAsync(6)
 
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(6)
-    void query.observer.fetchNextPage()
+    void query.$observer.getState()!.fetchNextPage()
     await vi.advanceTimersByTimeAsync(6)
 
     expect(query.$data.getState()?.pages.map((p) => p.id)).toEqual([0, 1, 2])

@@ -10,20 +10,26 @@ npm install @effector-tanstack-query/core @effector-tanstack-query/react @tansta
 
 ## Quick Start
 
+Register a `QueryClient` once with `setQueryClient`, then create queries and mutations without threading it through every factory call:
+
 ```ts
 import { QueryClient } from '@tanstack/query-core'
-import { createQuery, createMutation } from '@effector-tanstack-query/core'
+import { setQueryClient, createQuery } from '@effector-tanstack-query/core'
 
 const queryClient = new QueryClient()
-queryClient.mount()
+queryClient.mount() // enables refetchOnWindowFocus / refetchOnReconnect
+setQueryClient(queryClient)
 ```
+
+Under SSR or per-request isolation, override the client per scope via
+`fork({ values: [[$queryClient, qc]] })` — see [SSR](#ssr) below.
 
 ## createQuery
 
 Fetches data and exposes the result as Effector stores.
 
 ```ts
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   queryKey: ['user', 1],
   queryFn: () => fetch('/api/users/1').then((r) => r.json()),
 })
@@ -37,6 +43,9 @@ userQuery.$status // Store<'pending' | 'success' | 'error'>
 userQuery.$error // Store<Error | null>
 ```
 
+> All factories also accept an explicit `QueryClient` as the first argument
+> (`createQuery(queryClient, options)`) if you prefer to wire it manually.
+
 ### Reactive query keys
 
 Put an Effector Store inside the query key -- the query refetches automatically when the store changes.
@@ -47,7 +56,7 @@ import { createStore, createEvent } from 'effector'
 const setUserId = createEvent<number>()
 const $userId = createStore(1).on(setUserId, (_, id) => id)
 
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   queryKey: ['user', $userId],
   queryFn: ({ queryKey }) => {
     const userId = queryKey[1]
@@ -68,7 +77,7 @@ Control when the query runs with a Store.
 ```ts
 const $isLoggedIn = createStore(false)
 
-const profileQuery = createQuery(queryClient, {
+const profileQuery = createQuery({
   queryKey: ['profile'],
   queryFn: () => fetch('/api/profile').then((r) => r.json()),
   enabled: $isLoggedIn, // only fetches when true
@@ -80,12 +89,12 @@ const profileQuery = createQuery(queryClient, {
 Use one query's store as another's `enabled`:
 
 ```ts
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   queryKey: ['user', $userId],
   queryFn: fetchUser,
 })
 
-const postsQuery = createQuery(queryClient, {
+const postsQuery = createQuery({
   queryKey: ['posts', $userId],
   queryFn: fetchPosts,
   enabled: userQuery.$isSuccess, // waits for user to load
@@ -99,7 +108,7 @@ Show previous data while fetching a new key:
 ```ts
 import { keepPreviousData } from '@tanstack/query-core'
 
-const todosQuery = createQuery(queryClient, {
+const todosQuery = createQuery({
   queryKey: ['todos', $page],
   queryFn: ({ queryKey }) => fetchTodos(queryKey[1]),
   placeholderData: keepPreviousData,
@@ -111,7 +120,7 @@ todosQuery.$isPlaceholderData // Store<boolean> -- true while showing stale data
 ### Polling with refetchInterval
 
 ```ts
-const statusQuery = createQuery(queryClient, {
+const statusQuery = createQuery({
   queryKey: ['status'],
   queryFn: fetchStatus,
   refetchInterval: 5000, // refetch every 5 seconds
@@ -156,7 +165,7 @@ Fetches paginated data with automatic page tracking.
 ```ts
 import { createInfiniteQuery } from '@effector-tanstack-query/core'
 
-const postsQuery = createInfiniteQuery(queryClient, {
+const postsQuery = createInfiniteQuery({
   queryKey: ['posts'],
   queryFn: ({ pageParam }) =>
     fetch(`/api/posts?cursor=${pageParam}`).then((r) => r.json()),
@@ -178,7 +187,7 @@ postsQuery.$isFetchingNextPage // Store<boolean>
 ### Bidirectional pagination
 
 ```ts
-const chatQuery = createInfiniteQuery(queryClient, {
+const chatQuery = createInfiniteQuery({
   queryKey: ['messages'],
   queryFn: ({ pageParam }) => fetchMessages(pageParam),
   getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -248,7 +257,7 @@ function PostList() {
 Executes mutations and tracks their state.
 
 ```ts
-const addTodo = createMutation(queryClient, {
+const addTodo = createMutation({
   mutationFn: (text: string) =>
     fetch('/api/todos', {
       method: 'POST',
@@ -281,7 +290,7 @@ addTodo.reset() // back to idle
 ### Callbacks
 
 ```ts
-const addTodo = createMutation(queryClient, {
+const addTodo = createMutation({
   mutationFn: postTodo,
   onSuccess: (data, variables, context) => {
     queryClient.invalidateQueries({ queryKey: ['todos'] })
@@ -405,7 +414,7 @@ function App() {
 }
 ```
 
-The promise comes from `queryClient.fetchQuery(observer.options)`, so concurrent suspending consumers of the same `queryKey` deduplicate to a single fetch.
+The promise is `queryClient.fetchQuery(...)` under the hood, so concurrent suspending consumers of the same `queryKey` deduplicate to a single fetch.
 
 ### Low-level `useUnit` pattern
 
@@ -441,13 +450,20 @@ function App() {
 
 ## Testing with fork
 
-Use Effector's `fork` for isolated test scopes:
+Use Effector's `fork` for isolated test scopes. Inject a fresh
+`QueryClient` per scope via `$queryClient` so tests don't share cache:
 
 ```ts
 import { fork, allSettled } from 'effector'
+import { $queryClient } from '@effector-tanstack-query/core'
 
 test('loads user data', async () => {
-  const scope = fork()
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  queryClient.mount()
+
+  const scope = fork({ values: [[$queryClient, queryClient]] })
 
   await allSettled(userQuery.mounted, { scope })
   await vi.advanceTimersByTimeAsync(10)
@@ -467,22 +483,27 @@ Two persistence layers cooperate to make SSR work:
 For (2) to work, each query/mutation/infiniteQuery must receive a unique `name`. Without it, the library's internal stores have no SID and `serialize(scope)` silently drops them. A development-mode warning fires the first time you create one without a name.
 
 ```ts
-const userQuery = createQuery(queryClient, {
+const userQuery = createQuery({
   name: 'userQuery', // required for scope serialization
   queryKey: ['user', $userId],
   queryFn: fetchUser,
 })
 ```
 
+For request-isolated SSR, create a fresh `QueryClient` per request and inject
+it through the `$queryClient` store via `fork({ values })` — no globals to
+clean up between requests.
+
 ### Server
 
 ```ts
 import { dehydrate } from '@tanstack/query-core'
 import { fork, allSettled, serialize } from 'effector'
+import { $queryClient } from '@effector-tanstack-query/core'
 
 const queryClient = new QueryClient()
-queryClient.mount()
-const scope = fork()
+// queryClient.mount() is intentionally NOT called on the server.
+const scope = fork({ values: [[$queryClient, queryClient]] })
 
 await allSettled(userQuery.mounted, { scope })
 // ...wait for fetches to settle
@@ -497,14 +518,20 @@ const serializedScope = serialize(scope)
 ```ts
 import { hydrate } from '@tanstack/query-core'
 import { fork, allSettled } from 'effector'
+import { setQueryClient } from '@effector-tanstack-query/core'
 
 const queryClient = new QueryClient()
 queryClient.mount()
 hydrate(queryClient, dehydratedQc)
 
 const scope = fork({ values: serializedScope })
+// Set the per-scope queryClient via the event (fires inside the scope only).
+await allSettled(setQueryClient, { scope, params: queryClient })
 
 // Mounting the query will read from the hydrated cache —
 // no refetch when staleTime keeps the data fresh.
 await allSettled(userQuery.mounted, { scope })
 ```
+
+> For single-scope client apps you can also call `setQueryClient(queryClient)`
+> once outside of any scope (after `hydrate`) and skip the `allSettled` call.
