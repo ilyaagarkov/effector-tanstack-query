@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.webp">
+    <img alt="effector-tanstack-query — powerful data fetching and state management" src=".github/assets/hero-light.webp" width="720">
+  </picture>
+</p>
+
 # @effector-tanstack-query
 
 Effector bindings for [TanStack Query](https://tanstack.com/query) — reactive
