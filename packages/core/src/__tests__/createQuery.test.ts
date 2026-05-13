@@ -268,4 +268,45 @@ describe('createQuery', () => {
 
     expect(statuses).toEqual(['pending', 'success'])
   })
+
+  it('should treat refetchInterval Store as reactive — toggling stops/starts polling', async () => {
+    const key = queryKey()
+    const setInterval = createEvent<number | false>()
+    const $interval = createStore<number | false>(50).on(
+      setInterval,
+      (_, v) => v,
+    )
+
+    let fetchCount = 0
+    const query = createQuery(queryClient, {
+      name: 'reactiveInterval',
+      queryKey: key,
+      queryFn: () => {
+        fetchCount++
+        return sleep(1).then(() => `r-${fetchCount}`)
+      },
+      refetchInterval: $interval,
+      staleTime: 0,
+    })
+
+    query.mounted()
+    // Initial fetch.
+    await vi.advanceTimersByTimeAsync(2)
+    expect(fetchCount).toBe(1)
+
+    // After ~120 ms two more interval fetches should have fired (50, 100 marks).
+    await vi.advanceTimersByTimeAsync(120)
+    const beforeStop = fetchCount
+    expect(beforeStop).toBeGreaterThan(1)
+
+    // Disable polling — no further fetches.
+    setInterval(false)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(fetchCount).toBe(beforeStop)
+
+    // Re-enable — counter advances again.
+    setInterval(50)
+    await vi.advanceTimersByTimeAsync(150)
+    expect(fetchCount).toBeGreaterThan(beforeStop)
+  })
 })

@@ -1,6 +1,10 @@
 import * as React from 'react'
 import { useUnit } from 'effector-react'
-import type { FetchStatus, QueryStatus } from '@tanstack/query-core'
+import type {
+  FetchStatus,
+  MutateOptions,
+  QueryStatus,
+} from '@tanstack/query-core'
 import type {
   InfiniteQueryResult,
   MutationResult,
@@ -63,6 +67,19 @@ export interface UseMutationResult<TData, TError, TVariables> {
   isError: boolean
   isIdle: boolean
   mutate: (variables: TVariables) => void
+  /**
+   * Trigger the mutation with per-call callbacks layered on top of the
+   * observer-level ones (`onSuccess` / `onError` / `onSettled` in
+   * `createMutation` options). Use this for component-local reactions
+   * that don't fit module-level `sample` wiring — navigation after success,
+   * one-shot toasts, etc.
+   */
+  mutateWith: (args: {
+    variables: TVariables
+    onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
+    onError?: MutateOptions<TData, TError, TVariables>['onError']
+    onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
+  }) => void
   reset: () => void
 }
 
@@ -89,6 +106,7 @@ export function useMutation<TData = unknown, TError = Error, TVariables = void>(
   const start = useUnit(mutation.start)
   const unmount = useUnit(mutation.unmounted)
   const mutate = useUnit(mutation.mutate)
+  const mutateWith = useUnit(mutation.mutateWith)
   const reset = useUnit(mutation.reset)
 
   React.useEffect(() => {
@@ -96,7 +114,7 @@ export function useMutation<TData = unknown, TError = Error, TVariables = void>(
     return () => unmount()
   }, [start, unmount])
 
-  return { ...state, mutate, reset }
+  return { ...state, mutate, mutateWith, reset }
 }
 
 export interface UseInfiniteQueryResult<TData, TError> {

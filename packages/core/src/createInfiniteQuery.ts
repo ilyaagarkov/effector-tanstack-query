@@ -6,6 +6,7 @@ import type {
   QueryKey,
 } from '@tanstack/query-core'
 import { createBaseQuery, sidConfig, warnMissingName } from './createBaseQuery'
+import { resolveReactiveRefetchInterval } from './resolve'
 import type {
   CreateInfiniteQueryOptions,
   InfiniteQueryResult,
@@ -61,6 +62,13 @@ export function createInfiniteQuery<
 
   if (!name) warnMissingName('createInfiniteQuery')
 
+  const reactiveRefetchInterval = resolveReactiveRefetchInterval(
+    (restOptions as { refetchInterval?: unknown }).refetchInterval,
+  )
+  if (reactiveRefetchInterval) {
+    delete (restOptions as { refetchInterval?: unknown }).refetchInterval
+  }
+
   const base = createBaseQuery<
     TData,
     TError,
@@ -78,7 +86,7 @@ export function createInfiniteQuery<
     }
   >(
     explicitClient,
-    { queryKey, enabled, name },
+    { queryKey, enabled, name, reactiveRefetchInterval },
     {
       createObserver: (qc, { queryKey: key, enabled: isEnabled }) =>
         new InfiniteQueryObserver<
@@ -192,6 +200,25 @@ export function createInfiniteQuery<
     },
   )
 
+  // See createQuery.prefetch — same contract, but uses fetchInfiniteQuery so
+  // the first page is fetched + cached on the server.
+  const prefetch = createEvent<void>()
+  const prefetchFx = attach({
+    source: {
+      qc: base.$queryClient,
+      key: base.$resolvedKey,
+      enabled: base.$enabled,
+    },
+    effect: ({ qc, key, enabled }) => {
+      if (!qc || !enabled) return
+      return qc.fetchInfiniteQuery({
+        ...restOptions,
+        queryKey: key,
+      } as any)
+    },
+  })
+  sample({ clock: prefetch, target: prefetchFx })
+
   const result: InfiniteQueryResult<TData, TError, TPageParam> = {
     $data: base.$data,
     $error: base.$error,
@@ -213,6 +240,7 @@ export function createInfiniteQuery<
     fetchNextPage: base.fetchNextPage,
     fetchPreviousPage: base.fetchPreviousPage,
     refresh: base.refresh,
+    prefetch,
     mounted: base.mounted,
     unmounted: base.unmounted,
   }

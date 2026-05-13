@@ -1,6 +1,8 @@
+import { attach, createEvent, sample } from 'effector'
 import { QueryObserver } from '@tanstack/query-core'
 import type { QueryClient } from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
+import { resolveReactiveRefetchInterval } from './resolve'
 import type { CreateQueryOptions, QueryResult } from './types'
 
 export function createQuery<
@@ -36,6 +38,16 @@ export function createQuery<
 
   if (!name) warnMissingName('createQuery')
 
+  // If `refetchInterval` is a Store, pull it out for reactive wiring in
+  // createBaseQuery — otherwise leave it in restOptions for the observer
+  // constructor (handles plain values and function forms unchanged).
+  const reactiveRefetchInterval = resolveReactiveRefetchInterval(
+    (restOptions as { refetchInterval?: unknown }).refetchInterval,
+  )
+  if (reactiveRefetchInterval) {
+    delete (restOptions as { refetchInterval?: unknown }).refetchInterval
+  }
+
   const base = createBaseQuery<
     TData,
     TError,
@@ -43,16 +55,42 @@ export function createQuery<
     QueryObserver<TQueryFnData, TError, TData>
   >(
     explicitClient,
-    { queryKey, enabled, name },
+    { queryKey, enabled, name, reactiveRefetchInterval },
     {
       createObserver: (qc, { queryKey: key, enabled: isEnabled }) =>
+        // Cast: restOptions's `refetchInterval` may still type as
+        // `Store | number | false | fn`; the Store form is deleted at runtime
+        // above, but TS can't narrow that here.
         new QueryObserver<TQueryFnData, TError, TData>(qc, {
           ...restOptions,
           queryKey: key,
           enabled: isEnabled,
-        }),
+        } as any),
     },
   )
+
+  // Prefetch event: drives `queryClient.fetchQuery` directly (no Observer)
+  // and **awaits** the result, so `allSettled(query.prefetch, { scope })` on
+  // the server returns only after the cache has the data. Unlike `mounted`,
+  // which kicks off a background subscription and resolves immediately, this
+  // is the right primitive for SSR / route loaders. The current resolved key
+  // + enabled is read from the scope via attach — reactive keys work.
+  const prefetch = createEvent<void>()
+  const prefetchFx = attach({
+    source: {
+      qc: base.$queryClient,
+      key: base.$resolvedKey,
+      enabled: base.$enabled,
+    },
+    effect: ({ qc, key, enabled }) => {
+      if (!qc || !enabled) return
+      return qc.fetchQuery({
+        ...restOptions,
+        queryKey: key,
+      } as any)
+    },
+  })
+  sample({ clock: prefetch, target: prefetchFx })
 
   // Lazy `observer` field for backward compatibility — returns the
   // default-scope observer (non-fork). Tests and advanced consumers that read
@@ -74,6 +112,7 @@ export function createQuery<
     >['$observer'],
     $queryClient: base.$queryClient,
     refresh: base.refresh,
+    prefetch,
     mounted: base.mounted,
     unmounted: base.unmounted,
   }

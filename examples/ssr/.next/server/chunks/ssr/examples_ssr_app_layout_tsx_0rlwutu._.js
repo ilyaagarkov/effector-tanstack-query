@@ -1,0 +1,3 @@
+module.exports=[30555,a=>{"use strict";var b=a.i(22234);a.s(["default",0,function({children:a}){return(0,b.jsx)("html",{lang:"en",children:(0,b.jsx)("body",{children:a})})},"metadata",0,{title:"effector-tanstack-query — SSR example",description:"Per-request fork scope + dehydrate/hydrate for hydrationless first paint."}])},57916,a=>{a.n(a.i(30555))}];
+
+//# sourceMappingURL=examples_ssr_app_layout_tsx_0rlwutu._.js.map

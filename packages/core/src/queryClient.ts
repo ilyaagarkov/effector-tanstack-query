@@ -11,6 +11,10 @@ import type { QueryClient } from '@tanstack/query-core'
  */
 export const $queryClient = createStore<QueryClient | null>(null, {
   name: '@tanstack/query-effector.$queryClient',
+  sid: '@tanstack/query-effector.$queryClient',
+  // Carries a runtime-only object (`QueryClient` instance) — must not
+  // round-trip through `serialize(scope)`. Per-scope injection happens
+  // via `fork({ values: [[$queryClient, qc]] })` instead.
   serialize: 'ignore',
 })
 

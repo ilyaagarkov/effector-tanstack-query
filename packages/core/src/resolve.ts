@@ -32,3 +32,19 @@ export function resolveEnabled(
   if (is.store(enabled)) return enabled
   return createStore(enabled ?? true)
 }
+
+/**
+ * `refetchInterval` accepts a static value, a function `(query) => …`, or an
+ * effector `Store<number | false>`. Only the Store form is "reactive" — the
+ * function form is evaluated by the observer on every tick and stays in the
+ * observer's options. Returns the store if one was passed, `undefined`
+ * otherwise (signaling the per-flavor factory to keep the value in
+ * `restOptions` for the observer constructor).
+ */
+export function resolveReactiveRefetchInterval(
+  value: unknown,
+): Store<number | false | undefined> | undefined {
+  return is.store(value)
+    ? (value as Store<number | false | undefined>)
+    : undefined
+}

@@ -1,0 +1,145 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: #0f1115;
+  color: #e6e8eb;
+  line-height: 1.5;
+}
+a {
+  color: #6ea3ff;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+button {
+  font: inherit;
+  background: #1f2530;
+  color: #e6e8eb;
+  border: 1px solid #2d3340;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: #2a3140;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+input,
+select {
+  font: inherit;
+  background: #1f2530;
+  color: #e6e8eb;
+  border: 1px solid #2d3340;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+code,
+pre {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 0.9em;
+}
+pre {
+  background: #1a1e26;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  background: #14171c;
+  border-right: 1px solid #1f2530;
+  padding: 24px 16px;
+}
+.sidebar h1 {
+  font-size: 16px;
+  margin: 0 0 16px;
+  color: #9ca3af;
+}
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sidebar nav a {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #c0c5cc;
+}
+.sidebar nav a.active {
+  background: #1f2530;
+  color: #fff;
+}
+.main {
+  padding: 32px 40px;
+  max-width: 900px;
+}
+.main h2 {
+  margin-top: 0;
+}
+.card {
+  background: #14171c;
+  border: 1px solid #1f2530;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.muted {
+  color: #9ca3af;
+  font-size: 0.9em;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1f2530;
+  color: #9ca3af;
+  font-size: 0.8em;
+}
+.badge.success {
+  background: #1a3a2a;
+  color: #6ad19a;
+}
+.badge.pending {
+  background: #3a2a1a;
+  color: #d19a6a;
+}
+.badge.error {
+  background: #3a1a1a;
+  color: #d16a6a;
+}
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.list-item {
+  background: #1a1e26;
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-transform: capitalize;
+}

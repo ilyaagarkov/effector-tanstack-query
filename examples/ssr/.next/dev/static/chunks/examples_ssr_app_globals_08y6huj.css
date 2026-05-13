@@ -1,0 +1,121 @@
+/* [project]/examples/ssr/app/globals.css [app-client] (css) */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: #e6e8eb;
+  background: #0f1115;
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: #6ea3ff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font: inherit;
+  color: #e6e8eb;
+  cursor: pointer;
+  background: #1f2530;
+  border: 1px solid #2d3340;
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+
+button:hover:not(:disabled) {
+  background: #2a3140;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+select {
+  font: inherit;
+  color: #e6e8eb;
+  background: #1f2530;
+  border: 1px solid #2d3340;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em;
+}
+
+pre {
+  background: #1a1e26;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.card {
+  background: #14171c;
+  border: 1px solid #1f2530;
+  border-radius: 8px;
+  margin: 16px 0;
+  padding: 16px;
+}
+
+.row {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  display: flex;
+}
+
+.muted {
+  color: #9ca3af;
+  font-size: .9em;
+}
+
+.badge {
+  color: #9ca3af;
+  background: #1f2530;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: .8em;
+  display: inline-block;
+}
+
+.badge.success {
+  color: #6ad19a;
+  background: #1a3a2a;
+}
+
+.badge.pending {
+  color: #d19a6a;
+  background: #3a2a1a;
+}
+
+.list {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  display: grid;
+}
+
+.list-item {
+  text-transform: capitalize;
+  background: #1a1e26;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/*# sourceMappingURL=examples_ssr_app_globals_08y6huj.css.map*/

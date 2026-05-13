@@ -1,0 +1,13 @@
+{
+  "pages": {
+    "/_app": []
+  },
+  "devFiles": [],
+  "polyfillFiles": [],
+  "lowPriorityFiles": [
+    "static/-QUx7-_Okuwp-OJFDbn0y/_buildManifest.js",
+    "static/-QUx7-_Okuwp-OJFDbn0y/_ssgManifest.js",
+    "static/-QUx7-_Okuwp-OJFDbn0y/_clientMiddlewareManifest.js"
+  ],
+  "rootMainFiles": []
+}

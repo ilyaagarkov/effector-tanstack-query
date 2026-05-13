@@ -1,6 +1,8 @@
 export { createQuery } from './createQuery'
 export { createInfiniteQuery } from './createInfiniteQuery'
 export { createMutation } from './createMutation'
+export { createInvalidate } from './createInvalidate'
+export type { CreateInvalidateOptions } from './createInvalidate'
 export { $queryClient, setQueryClient } from './queryClient'
 export type {
   CreateInfiniteQueryOptions,

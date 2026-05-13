@@ -34,10 +34,20 @@ export interface CreateQueryOptions<
   TData = TQueryFnData,
 > extends Omit<
   QueryObserverOptions<TQueryFnData, TError, TData>,
-  'queryKey' | 'enabled'
+  'queryKey' | 'enabled' | 'refetchInterval'
 > {
   queryKey: EffectorQueryKey
   enabled?: StoreOrValue<boolean>
+  /**
+   * Polling interval in milliseconds, `false` to disable, or a Store for
+   * runtime toggling — `Store<number | false>`. When a Store is passed, the
+   * observer's `refetchInterval` is automatically kept in sync via
+   * `setOptions` on every store change. The function form (`(query) => …`)
+   * from TanStack Query is also still supported.
+   */
+  refetchInterval?:
+    | QueryObserverOptions<TQueryFnData, TError, TData>['refetchInterval']
+    | Store<number | false | undefined>
   /**
    * Stable name used to derive SIDs for the internal effector stores so that
    * `serialize(scope)` / `fork({ values })` round-trip works for SSR. Without
@@ -68,6 +78,19 @@ export interface QueryResult<TData, TError = Error> {
   $fetchStatus: Store<FetchStatus>
   /** Invalidates the query and triggers a background refetch */
   refresh: EventCallable<void>
+  /**
+   * Fetches the query via `queryClient.fetchQuery` and **awaits** the result.
+   * Unlike `mounted`, this is meant for server-side prefetching / route
+   * loaders where you need the cache populated before responding to the
+   * request — `await allSettled(query.prefetch, { scope })` returns only
+   * after the queryFn has resolved. Skips automatically when `enabled` is
+   * `false`.
+   *
+   * @example
+   * await allSettled(query.prefetch, { scope })
+   * // queryClient cache + scope are now ready to be dehydrated/serialized.
+   */
+  prefetch: EventCallable<void>
   /**
    * Initializes the query subscription. Must be called (or used with allSettled)
    * before the query starts fetching.
@@ -113,10 +136,20 @@ export interface CreateInfiniteQueryOptions<
     ReadonlyArray<unknown>,
     TPageParam
   >,
-  'queryKey' | 'enabled'
+  'queryKey' | 'enabled' | 'refetchInterval'
 > {
   queryKey: EffectorQueryKey
   enabled?: StoreOrValue<boolean>
+  /** See {@link CreateQueryOptions.refetchInterval}. */
+  refetchInterval?:
+    | InfiniteQueryObserverOptions<
+        TQueryFnData,
+        TError,
+        TData,
+        ReadonlyArray<unknown>,
+        TPageParam
+      >['refetchInterval']
+    | Store<number | false | undefined>
   /** See {@link CreateQueryOptions.name}. */
   name?: string
 }
@@ -148,6 +181,8 @@ export interface InfiniteQueryResult<
   fetchNextPage: EventCallable<void>
   fetchPreviousPage: EventCallable<void>
   refresh: EventCallable<void>
+  /** See {@link QueryResult.prefetch}. Uses `fetchInfiniteQuery` under the hood. */
+  prefetch: EventCallable<void>
   mounted: EventCallable<void>
   unmounted: EventCallable<void>
   /** See {@link QueryResult.$observer}. */
