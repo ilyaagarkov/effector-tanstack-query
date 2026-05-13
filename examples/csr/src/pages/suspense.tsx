@@ -96,8 +96,10 @@ export function SuspensePage() {
       </div>
 
       <pre>{`function PokemonCard() {
-  const pokemon = useSuspenseQuery(pokemonQuery)  // ← throws promise / error
-  return <Card pokemon={pokemon} />
+  // Returns { data, error, isFetching, refresh, ... } — same shape as useQuery
+  // but with data narrowed to non-nullable (Suspense absorbs pending state).
+  const { data: pokemon, isFetching } = useSuspenseQuery(pokemonQuery)
+  return <Card pokemon={pokemon} fetching={isFetching} />
 }
 
 <ErrorBoundary>
