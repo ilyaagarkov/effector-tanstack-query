@@ -12,6 +12,45 @@ export default defineConfig({
       title: 'effector-tanstack-query',
       description:
         'Effector bindings for TanStack Query — reactive data fetching with effector stores, SSR, and Suspense.',
+      // `favicon` controls the primary <link rel="icon">. Multi-size PNGs +
+      // apple-touch-icon + webmanifest are wired via `head` below; Starlight
+      // doesn't have first-class options for those yet.
+      favicon: '/favicon.ico',
+      head: [
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'icon',
+            type: 'image/png',
+            sizes: '32x32',
+            href: '/effector-tanstack-query/favicon-32x32.png',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'icon',
+            type: 'image/png',
+            sizes: '16x16',
+            href: '/effector-tanstack-query/favicon-16x16.png',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'apple-touch-icon',
+            sizes: '180x180',
+            href: '/effector-tanstack-query/apple-touch-icon.png',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'manifest',
+            href: '/effector-tanstack-query/site.webmanifest',
+          },
+        },
+      ],
       social: {
         github: 'https://github.com/ilyaagarkov/effector-tanstack-query',
       },
