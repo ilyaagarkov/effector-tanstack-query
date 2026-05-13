@@ -31,3 +31,10 @@ description: What effector-tanstack-query is, what it isn't, and when to reach f
 | SSR hydration       | `<HydrationBoundary>`                | `hydrate(qc, ...)` + `fork({ values: ... })`     |
 
 Both run on top of the same `@tanstack/query-core` cache.
+
+## Runnable examples
+
+Two reference apps live in [`examples/`](https://github.com/ilyaagarkov/effector-tanstack-query/tree/master/examples) in the repository:
+
+- **`examples/csr`** — Vite + React. Covers every common pattern: reactive pagination, dependent queries, `placeholderData`, reactive polling, infinite query, Suspense + ErrorBoundary, mutations + invalidation, optimistic update with rollback, per-call callbacks. MSW handles the mutation endpoints — no backend setup.
+- **`examples/ssr`** — Next.js 16 App Router. Per-request `QueryClient` + effector scope, `query.prefetch` for awaited SSR prefetching, `dehydrate` + `serialize`, hydration with no flash on first paint.

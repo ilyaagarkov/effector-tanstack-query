@@ -129,6 +129,31 @@ refetchInterval: (q) => {
 },
 ```
 
+### Reactive `refetchInterval`
+
+`refetchInterval` also accepts a `Store<number | false>`. Toggling the store starts / stops polling at runtime — the library calls `observer.setOptions({ refetchInterval })` on every store change, so the live observer picks up the new interval immediately.
+
+```ts
+import { createEvent, createStore } from 'effector'
+
+const togglePolling = createEvent()
+const $interval = createStore<number | false>(3000).on(
+  togglePolling,
+  (v) => (v === false ? 3000 : false),
+)
+
+const statusQuery = createQuery({
+  queryKey: ['status'],
+  queryFn: fetchStatus,
+  refetchInterval: $interval,   // ← reactive
+})
+
+// Anywhere in your app:
+togglePolling()  // → stops / resumes polling
+```
+
+This works under `fork({ values })` too — each scope drives its own observer through the same store.
+
 ## refetchOnMount / refetchOnWindowFocus / refetchOnReconnect
 
 All three accept `boolean | 'always' | (query) => boolean | 'always'` and behave exactly as in TanStack Query. Defaults: `true` for mount/focus/reconnect.

@@ -23,12 +23,13 @@ function createQuery<TQueryFnData, TError = Error, TData = TQueryFnData>(
 
 `CreateQueryOptions` extends `QueryObserverOptions` from `@tanstack/query-core`, with these adaptations:
 
-| Field      | Type                                                | Notes                                    |
-| ---------- | --------------------------------------------------- | ---------------------------------------- |
-| `queryKey` | `EffectorQueryKey`                                  | Array; elements may be `Store` or value  |
-| `enabled`  | `boolean \| Store<boolean>`                         | Reactive — accepts a store               |
-| `name`     | `string` (recommended)                              | Stable name for SID-based SSR            |
-| ...rest    | All other `QueryObserverOptions`                    | `staleTime`, `gcTime`, `retry`, `select`, `refetchInterval`, `refetchOnMount`, `refetchOnWindowFocus`, `refetchOnReconnect`, `placeholderData`, `meta`, `networkMode`, ... |
+| Field             | Type                                                                            | Notes                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `queryKey`        | `EffectorQueryKey`                                                              | Array; elements may be `Store` or value                                                |
+| `enabled`         | `boolean \| Store<boolean>`                                                     | Reactive — accepts a store                                                             |
+| `refetchInterval` | `number \| false \| ((q) => number \| false) \| Store<number \| false \| undefined>` | Static, function form (TanStack Query), or **Store form** for runtime polling toggling |
+| `name`            | `string` (recommended)                                                          | Stable name for SID-based SSR                                                          |
+| ...rest           | All other `QueryObserverOptions`                                                | `staleTime`, `gcTime`, `retry`, `select`, `refetchOnMount`, `refetchOnWindowFocus`, `refetchOnReconnect`, `placeholderData`, `meta`, `networkMode`, ... |
 
 `EffectorQueryKey`:
 
@@ -54,8 +55,25 @@ type EffectorQueryKey = ReadonlyArray<
 | `mounted`            | `EventCallable<void>`                         | Subscribe observer                       |
 | `unmounted`          | `EventCallable<void>`                         | Unsubscribe + cancel inflight            |
 | `refresh`            | `EventCallable<void>`                         | Invalidate + refetch                     |
+| `prefetch`           | `EventCallable<void>`                         | `queryClient.fetchQuery` + **awaits**; for SSR / route loaders |
 | `$observer`          | `Store<QueryObserver<TData, TError> \| null>` | Per-scope observer (created on `mounted()`) |
 | `$queryClient`       | `Store<QueryClient \| null>`                  | Resolved client for this query           |
+
+## `prefetch` vs `mounted`
+
+| Trigger    | What it does                                                   | `allSettled` returns when…           | Use case                                     |
+| ---------- | -------------------------------------------------------------- | ------------------------------------ | -------------------------------------------- |
+| `mounted`  | Creates the Observer, subscribes — initial fetch runs in background | The Observer is set up               | Component mount, in-page subscription        |
+| `prefetch` | Calls `queryClient.fetchQuery` and **awaits** the result       | The query has resolved (data cached) | SSR prefetch, route loaders, on-hover prime  |
+
+A typical SSR flow uses both:
+
+```ts
+await allSettled(userQuery.prefetch, { scope })  // populates qc cache
+await allSettled(userQuery.mounted, { scope })   // dispatches into $data, $status, ...
+```
+
+`prefetch` is a no-op when `enabled` is `false`.
 
 ## Generic inference
 

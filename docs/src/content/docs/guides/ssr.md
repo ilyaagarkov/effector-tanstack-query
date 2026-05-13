@@ -16,6 +16,12 @@ Create a fresh `QueryClient` **per request** and inject it through the
 `$queryClient` store via `fork({ values })`. Each request gets its own
 scope-isolated observer — nothing leaks between requests.
 
+Use **`query.prefetch`**, not `query.mounted`, to fill the cache on the
+server. `prefetch` calls `queryClient.fetchQuery(...)` under the hood
+and **awaits** the result, so by the time `allSettled` resolves the
+cache has data. `mounted` only kicks off a background subscription via
+the observer — it returns before the fetch completes.
+
 ```ts
 import { QueryClient, dehydrate } from '@tanstack/query-core'
 import { fork, allSettled, serialize } from 'effector'
@@ -27,11 +33,15 @@ export async function renderPage() {
 
   const scope = fork({ values: [[$queryClient, queryClient]] })
 
-  // Mount queries — fetches happen in this scope
-  await allSettled(userQuery.mounted, { scope })
-  // ...wait for everything you want to ship
+  // 1) Prefetch: awaits the queryFn → cache is populated.
+  await allSettled(userQuery.prefetch, { scope })
 
-  // Serialize both layers
+  // 2) Mount: observer reads from the now-populated cache and dispatches
+  //    the data into the effector stores ($data, $status, ...). No new
+  //    fetch is issued because the cache is fresh.
+  await allSettled(userQuery.mounted, { scope })
+
+  // 3) Serialize both layers
   const dehydratedQc = dehydrate(queryClient)
   const serializedScope = serialize(scope)
 
@@ -44,6 +54,11 @@ export async function renderPage() {
   return html
 }
 ```
+
+> No explicit `unmounted` after the response is built: the per-request
+> `queryClient` and `scope` are local to the function, and the returned
+> HTML only carries plain serialized snapshots — nothing keeps the live
+> observers / subscriptions alive after the response is sent.
 
 ## Client
 

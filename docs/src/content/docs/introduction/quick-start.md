@@ -118,5 +118,6 @@ setUserId(2) // → fires a refetch with key ['user', 2]
 ## What's next
 
 - Read [Queries](/effector-tanstack-query/guides/queries/) for `enabled`, `placeholderData`, `select`, and `refetchInterval`.
-- Read [Mutations](/effector-tanstack-query/guides/mutations/) for `mutateWith`, `finished` events, and offline behavior.
+- Read [Mutations](/effector-tanstack-query/guides/mutations/) for `mutateWith`, `finished` events, `createInvalidate`, and offline behavior.
 - For full type signatures, see the [API reference](/effector-tanstack-query/api/create-query/).
+- Browse runnable apps in [`examples/`](https://github.com/ilyaagarkov/effector-tanstack-query/tree/master/examples): `examples/csr` (Vite + React, every common pattern) and `examples/ssr` (Next.js App Router with `query.prefetch`).

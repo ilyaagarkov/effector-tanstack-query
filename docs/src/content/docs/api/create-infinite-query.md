@@ -58,6 +58,7 @@ In addition to the base `QueryResult` fields:
 | `$isFetchPreviousPageError` | `Store<boolean>`      | Previous page errored        |
 | `fetchNextPage`             | `EventCallable<void>` | Trigger next-page fetch      |
 | `fetchPreviousPage`         | `EventCallable<void>` | Trigger previous-page fetch  |
+| `prefetch`                  | `EventCallable<void>` | `queryClient.fetchInfiniteQuery` + awaits; for SSR — see [`createQuery#prefetch-vs-mounted`](/effector-tanstack-query/api/create-query/#prefetch-vs-mounted) |
 
 `$data` is `Store<TData | undefined>` where `TData` defaults to `InfiniteData<TQueryFnData, TPageParam>`. With `select`, it's whatever your selector returns.
 

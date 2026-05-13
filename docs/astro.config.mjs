@@ -60,6 +60,7 @@ export default defineConfig({
             { label: 'createQuery', slug: 'api/create-query' },
             { label: 'createMutation', slug: 'api/create-mutation' },
             { label: 'createInfiniteQuery', slug: 'api/create-infinite-query' },
+            { label: 'createInvalidate', slug: 'api/create-invalidate' },
           ],
         },
       ],

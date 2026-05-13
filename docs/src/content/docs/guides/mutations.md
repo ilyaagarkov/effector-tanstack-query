@@ -48,6 +48,29 @@ sample({
 
 This is the **idiomatic effector pattern** — keeps reactions declarative and out of components.
 
+## Invalidating queries after a mutation
+
+A common reaction is "after this mutation succeeds, refetch that query". `createInvalidate` is a small factory that builds the right event for it — it pulls the per-scope `QueryClient` via `$queryClient` (so it's fork-safe) and calls `invalidateQueries`. Just `sample` from `finished.success` into it:
+
+```ts
+import { createInvalidate, createMutation } from '@effector-tanstack-query/core'
+import { sample } from 'effector'
+
+const addTodo = createMutation({
+  name: 'addTodo',
+  mutationFn: postTodo,
+})
+
+const invalidateTodos = createInvalidate({ queryKey: ['todos'] })
+
+sample({
+  clock: addTodo.finished.success,
+  target: invalidateTodos,
+})
+```
+
+The same factory supports reactive keys (e.g. `queryKey: ['user', $userId]`) and key-prefix invalidation (`exact: false`). See [createInvalidate](/effector-tanstack-query/api/create-invalidate/) for the full API.
+
 ## Per-call callbacks
 
 When you need a component-local reaction (e.g. navigate after a button click), use `mutateWith` instead of `mutate`:
