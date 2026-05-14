@@ -16,8 +16,8 @@ them. Every observer field (`data`, `status`, `isPending`, …) becomes a
 `Store<T>`, every imperative action (`refetch`, `fetchNextPage`, `mutate`, …)
 becomes an `EventCallable`. A `Store` placed inside `queryKey` triggers
 automatic refetch on change. SSR works via the two persistence layers —
-`dehydrate` / `hydrate` for the queryClient cache and `serialize(scope)` /
-`fork({ values })` for the effector graph.
+`dehydrate` + `<HydrationBoundary>` for the queryClient cache and
+`serialize(scope)` / `fork({ values })` for the effector graph.
 
 ## Documentation
 

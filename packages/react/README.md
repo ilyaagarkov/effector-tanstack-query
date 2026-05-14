@@ -6,6 +6,7 @@ React hooks for [`@effector-tanstack-query/core`](https://www.npmjs.com/package/
 - `useMutation(mutation)` — returns `{ data, mutate, mutateWith, reset, … }`
 - `useInfiniteQuery(query)` — paginated variant
 - `useSuspenseQuery(query)` / `useSuspenseInfiniteQuery(query)` — Suspense-friendly with non-nullable `data`
+- `<HydrationBoundary state={...}>` — merges a server-prefetched `DehydratedState` into the scope's `QueryClient` (SSR companion to `EffectorNext` / `fork({ values })`)
 
 ```bash
 npm install @effector-tanstack-query/core @effector-tanstack-query/react \

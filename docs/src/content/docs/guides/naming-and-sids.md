@@ -46,7 +46,7 @@ fork({ values: serialize(scope) }).
 Behavior without `name`:
 
 - ✅ Everything still works at runtime — all stores update, all observers fire.
-- ✅ SSR via `dehydrate(queryClient)` + `hydrate(queryClient, ...)` still works.
+- ✅ SSR via `dehydrate(queryClient)` + `<HydrationBoundary>` still works (queryClient cache layer).
 - ❌ But `serialize(scope)` returns `{}` for the library's stores; the client scope starts empty.
 
 ## Picking good names
