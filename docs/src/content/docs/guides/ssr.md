@@ -14,12 +14,12 @@ You need both for a clean hydration with no flash and no extra refetch.
 
 Create a fresh `QueryClient` **per request** and inject it through the `$queryClient` store via `fork({ values })`. Each request gets its own scope-isolated observer — nothing leaks between requests.
 
-Use **`query.prefetch`**, not `query.mounted`, to fill the cache on the server. `prefetch` calls `queryClient.fetchQuery(...)` under the hood and **awaits** the result, so by the time `allSettled` resolves the cache has data. `mounted` only kicks off a background subscription via the observer — it returns before the fetch completes.
+Use the [`prefetchQueries`](/effector-tanstack-query/api/prefetch-queries/) helper to fill both SSR layers in the right order. It runs `prefetch` (awaits `qc.fetchQuery(...)` → cache populated) and then `mounted` (observer's first dispatch writes the cached data into the effector stores) for every query you hand it. Skipping `mounted` leaves the stores empty — `serialize(scope)` then ships nothing useful and the server-rendered HTML lacks data.
 
 ```ts
 import { QueryClient, dehydrate } from '@tanstack/query-core'
-import { fork, allSettled, serialize } from 'effector'
-import { $queryClient } from '@effector-tanstack-query/core'
+import { fork, serialize } from 'effector'
+import { $queryClient, prefetchQueries } from '@effector-tanstack-query/core'
 
 export async function renderPage() {
   const queryClient = new QueryClient()
@@ -27,15 +27,11 @@ export async function renderPage() {
 
   const scope = fork({ values: [[$queryClient, queryClient]] })
 
-  // 1) Prefetch: awaits the queryFn → cache is populated.
-  await allSettled(userQuery.prefetch, { scope })
+  // Fills both layers: queryClient cache (via prefetch) AND effector
+  // stores in scope (via mounted). Awaits each phase.
+  await prefetchQueries([userQuery], { scope })
 
-  // 2) Mount: observer reads from the now-populated cache and dispatches
-  //    the data into the effector stores ($data, $status, ...). No new
-  //    fetch is issued because the cache is fresh.
-  await allSettled(userQuery.mounted, { scope })
-
-  // 3) Snapshot both layers and ship them to the client.
+  // Snapshot both layers and ship them to the client.
   return {
     dehydratedQueryClient: dehydrate(queryClient),
     serializedScope: serialize(scope),
@@ -126,9 +122,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 ```tsx
 // app/page.tsx (server component)
-import { allSettled, fork, serialize } from 'effector'
+import { fork, serialize } from 'effector'
 import { QueryClient, dehydrate } from '@tanstack/query-core'
-import { $queryClient } from '@effector-tanstack-query/core'
+import { $queryClient, prefetchQueries } from '@effector-tanstack-query/core'
 import { PageHydration } from '@/lib/hydration-provider'
 import { listQuery, pokemonQuery } from '@/model/queries'
 
@@ -136,14 +132,7 @@ export default async function Home() {
   const queryClient = new QueryClient()
   const scope = fork({ values: [[$queryClient, queryClient]] })
 
-  await Promise.all([
-    allSettled(listQuery.prefetch, { scope }),
-    allSettled(pokemonQuery.prefetch, { scope }),
-  ])
-  await Promise.all([
-    allSettled(listQuery.mounted, { scope }),
-    allSettled(pokemonQuery.mounted, { scope }),
-  ])
+  await prefetchQueries([listQuery, pokemonQuery], { scope })
 
   return (
     <PageHydration

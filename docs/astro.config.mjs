@@ -101,6 +101,7 @@ export default defineConfig({
             { label: 'createMutation', slug: 'api/create-mutation' },
             { label: 'createInfiniteQuery', slug: 'api/create-infinite-query' },
             { label: 'createInvalidate', slug: 'api/create-invalidate' },
+            { label: 'prefetchQueries', slug: 'api/prefetch-queries' },
           ],
         },
       ],

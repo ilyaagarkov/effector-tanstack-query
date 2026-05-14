@@ -1,15 +1,12 @@
 import 'server-only'
 import { QueryClient, dehydrate } from '@tanstack/query-core'
-import { allSettled, fork, serialize } from 'effector'
-import { $queryClient } from '@effector-tanstack-query/core'
+import { fork, serialize } from 'effector'
+import {
+  $queryClient,
+  prefetchQueries,
+  type PrefetchableQuery,
+} from '@effector-tanstack-query/core'
 import type { Scope } from 'effector'
-
-// Minimal shape we actually need — accepts any QueryResult / InfiniteQueryResult
-// without forcing the caller to widen its TData / TError type parameters.
-interface PrefetchableQuery {
-  prefetch: import('effector').EventCallable<void>
-  mounted: import('effector').EventCallable<void>
-}
 
 /**
  * Build a fresh QueryClient + effector scope **per request** for the server
@@ -36,26 +33,21 @@ export function makeRequestScope(): { queryClient: QueryClient; scope: Scope } {
 
 /**
  * Server-side prefetch helper:
- *
- *   1. Fire `query.prefetch` for each query in scope — runs
- *      `qc.fetchQuery(...)` and **awaits** the result, so by the time
- *      `allSettled` resolves the cache has data.
- *   2. Fire `query.mounted` for each query — creates the observer in scope
- *      and immediately dispatches the cached state into the effector stores
- *      (observer reads from the now-populated cache, no second fetch).
- *   3. Snapshot both layers (`dehydrate` + `serialize`) so the client can
+ *   1. `prefetchQueries(queries, { scope })` — runs both `prefetch` and
+ *      `mounted` for every query, in the right order. Cache + effector
+ *      stores are populated by the time it resolves.
+ *   2. Snapshot both layers (`dehydrate` + `serialize`) so the client can
  *      hydrate with data on the very first render — no flash.
  */
 export async function prefetch(
   scope: Scope,
   queryClient: QueryClient,
-  queries: Array<PrefetchableQuery>,
+  queries: ReadonlyArray<PrefetchableQuery>,
 ): Promise<{
   dehydratedQueryClient: ReturnType<typeof dehydrate>
   serializedScope: ReturnType<typeof serialize>
 }> {
-  await Promise.all(queries.map((q) => allSettled(q.prefetch, { scope })))
-  await Promise.all(queries.map((q) => allSettled(q.mounted, { scope })))
+  await prefetchQueries(queries, { scope })
 
   return {
     dehydratedQueryClient: dehydrate(queryClient),
