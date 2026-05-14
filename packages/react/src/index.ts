@@ -1,16 +1,63 @@
 import * as React from 'react'
 import { useUnit } from 'effector-react'
+import { hydrate } from '@tanstack/query-core'
 import type {
+  DehydratedState,
   FetchStatus,
+  HydrateOptions,
   MutateOptions,
   QueryStatus,
 } from '@tanstack/query-core'
+import { $queryClient } from '@effector-tanstack-query/core'
 import type {
   InfiniteQueryResult,
   MutationResult,
   MutationStatus,
   QueryResult,
 } from '@effector-tanstack-query/core'
+
+export interface HydrationBoundaryProps {
+  /**
+   * Snapshot produced by `dehydrate(queryClient)` on the server. Re-applied
+   * to the scope's `QueryClient` cache so observers mounted under this tree
+   * read prefetched data instead of triggering fresh network requests.
+   */
+  state?: DehydratedState
+  /** Forwarded to `hydrate(...)` — see `@tanstack/query-core` docs. */
+  options?: HydrateOptions
+  children?: React.ReactNode
+}
+
+/**
+ * Merges a server-prefetched `DehydratedState` into the scope's
+ * `QueryClient` cache.
+ *
+ * Mirrors `<HydrationBoundary>` from `@tanstack/react-query`: hydration
+ * runs in `useMemo` so the merge happens during the render phase (children
+ * see a populated cache on their first render, no flash). The hook
+ * resolves the QueryClient via `useUnit($queryClient)` instead of
+ * `useQueryClient()` — meaning each fork scope can have its own client
+ * without an additional `<QueryClientProvider>` in the tree.
+ *
+ * `hydrate` is idempotent: re-rendering with the same `state` reference
+ * is a no-op. Pass new `state` references on navigation to merge fresh
+ * snapshots.
+ *
+ * Note: this only handles the QueryClient cache layer. Effector store
+ * snapshots (e.g. `serialize(scope)`) flow through your existing
+ * `<Provider>` / `<EffectorNext values>` layer — orthogonal concerns.
+ */
+export function HydrationBoundary({
+  state,
+  options,
+  children,
+}: HydrationBoundaryProps): React.ReactElement {
+  const queryClient = useUnit($queryClient)
+  React.useMemo(() => {
+    if (queryClient && state) hydrate(queryClient, state, options)
+  }, [queryClient, state, options])
+  return React.createElement(React.Fragment, null, children)
+}
 
 export interface UseQueryResult<TData, TError = Error> {
   data: TData | undefined
