@@ -14,6 +14,7 @@ export default defineConfig({
     'src/createBaseQuery.ts',
     'src/createInvalidate.ts',
     'src/queryClient.ts',
+    'src/prefetchQueries.ts',
     'src/resolve.ts',
     'src/types.ts',
   ],
