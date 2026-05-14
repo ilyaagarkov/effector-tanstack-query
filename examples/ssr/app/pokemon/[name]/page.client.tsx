@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import Link from 'next/link'
-import { useUnit } from 'effector-react'
-import { useQuery } from '@effector-tanstack-query/react'
-import { detailNameSet, pokemonDetailQuery } from '@/model/pokemon-detail'
-import { $favorites, favoriteToggled } from '@/model/favorites'
+import * as React from "react";
+import Link from "next/link";
+import { useUnit } from "effector-react";
+import { useQuery } from "@effector-tanstack-query/react";
+import { detailNameSet, pokemonDetailQuery } from "@/model/pokemon-detail";
+import { $favorites, favoriteToggled } from "@/model/favorites";
 
 /**
  * Detail-page body. Client component — runs after RSC payload arrives.
@@ -17,27 +17,27 @@ import { $favorites, favoriteToggled } from '@/model/favorites'
  * snapshot merges in.
  */
 export function DetailBody({ name }: { name: string }) {
-  const setDetailName = useUnit(detailNameSet)
+  const setDetailName = useUnit(detailNameSet);
 
   React.useEffect(() => {
-    setDetailName(name)
-  }, [name, setDetailName])
+    setDetailName(name);
+  }, [name, setDetailName]);
 
-  const { data, isPending, isFetching, error } = useQuery(pokemonDetailQuery)
-  const [favorites, toggleFavorite] = useUnit([$favorites, favoriteToggled])
-  const isFavorite = favorites.includes(name)
+  const { data, isPending, isFetching, error } = useQuery(pokemonDetailQuery);
+  const [favorites, toggleFavorite] = useUnit([$favorites, favoriteToggled]);
+  const isFavorite = favorites.includes(name);
 
   return (
     <main className="main">
       <p className="muted">
         <Link href="/">← back to home</Link>
       </p>
-      <h1 style={{ textTransform: 'capitalize' }}>{name}</h1>
+      <h1 style={{ textTransform: "capitalize" }}>{name}</h1>
 
       <section className="card">
         <div className="row">
           <button onClick={() => toggleFavorite(name)}>
-            {isFavorite ? '★ remove from favorites' : '☆ add to favorites'}
+            {isFavorite ? "★ remove from favorites" : "☆ add to favorites"}
           </button>
           {isFetching && <span className="badge pending">fetching…</span>}
         </div>
@@ -60,7 +60,7 @@ export function DetailBody({ name }: { name: string }) {
                 height {data.height} · weight {data.weight}
               </div>
               <div className="muted">
-                types: {data.types.map((t) => t.type.name).join(', ')}
+                types: {data.types.map((t) => t.type.name).join(", ")}
               </div>
             </div>
           </div>
@@ -68,11 +68,11 @@ export function DetailBody({ name }: { name: string }) {
       </section>
 
       <p className="muted">
-        Reload the page — the data is already in the SSR HTML (no flash).
-        Open DevTools "Network" and reload: only the document + assets,
-        no <code>pokemon/{name}</code> XHR. Then click "add to favorites"
-        and navigate back to home — the counter persists.
+        Reload the page — the data is already in the SSR HTML (no flash). Open
+        DevTools "Network" and reload: only the document + assets, no{" "}
+        <code>pokemon/{name}</code> XHR. Then click "add to favorites" and
+        navigate back to home — the counter persists.
       </p>
     </main>
-  )
+  );
 }
