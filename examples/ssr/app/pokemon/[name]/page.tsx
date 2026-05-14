@@ -1,8 +1,9 @@
 import { dehydrate } from '@tanstack/query-core'
 import { allSettled, serialize } from 'effector'
+import { EffectorNext } from '@effector/next'
+import { HydrationBoundary } from '@effector-tanstack-query/react'
 import { prefetchQueries } from '@effector-tanstack-query/core'
 import { makeRequestScope } from '@/lib/server'
-import { PageHydration } from '@/lib/hydration-provider'
 import { detailNameSet, pokemonDetailQuery } from '@/model/pokemon-detail'
 import { DetailBody } from './page.client'
 
@@ -17,10 +18,10 @@ import { DetailBody } from './page.client'
  *      `prefetchQueries`, so the queryFn runs against the URL name.
  *   3. `prefetchQueries(...)` fills both layers (cache + effector
  *      stores) for the resolved key.
- *   4. `<PageHydration>` ships both snapshots to the browser; the
- *      singleton QueryClient cache is merged in, so repeat visits to
- *      the same name (or a name the home page already loaded) hit
- *      cache instantly.
+ *   4. `<HydrationBoundary>` + `<EffectorNext>` merge both snapshots
+ *      into the singleton browser state. The singleton QueryClient
+ *      cache means repeat visits to the same name (or a name the home
+ *      page already loaded) hit cache instantly.
  */
 export default async function Page({
   params,
@@ -34,11 +35,10 @@ export default async function Page({
   await prefetchQueries([pokemonDetailQuery], { scope })
 
   return (
-    <PageHydration
-      dehydratedQueryClient={dehydrate(queryClient)}
-      serializedScope={serialize(scope)}
-    >
-      <DetailBody name={name} />
-    </PageHydration>
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <EffectorNext values={serialize(scope)}>
+        <DetailBody name={name} />
+      </EffectorNext>
+    </HydrationBoundary>
   )
 }

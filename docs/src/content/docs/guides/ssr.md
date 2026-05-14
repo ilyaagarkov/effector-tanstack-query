@@ -124,8 +124,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 // app/page.tsx (server component)
 import { fork, serialize } from 'effector'
 import { QueryClient, dehydrate } from '@tanstack/query-core'
+import { EffectorNext } from '@effector/next'
+import { HydrationBoundary } from '@effector-tanstack-query/react'
 import { $queryClient, prefetchQueries } from '@effector-tanstack-query/core'
-import { PageHydration } from '@/lib/hydration-provider'
 import { listQuery, pokemonQuery } from '@/model/queries'
 
 export default async function Home() {
@@ -135,47 +136,24 @@ export default async function Home() {
   await prefetchQueries([listQuery, pokemonQuery], { scope })
 
   return (
-    <PageHydration
-      dehydratedQueryClient={dehydrate(queryClient)}
-      serializedScope={serialize(scope)}
-    >
-      <PageBody />
-    </PageHydration>
-  )
-}
-```
-
-```tsx
-// src/lib/hydration-provider.tsx (client)
-'use client'
-import { EffectorNext } from '@effector/next'
-import { HydrationBoundary } from '@effector-tanstack-query/react'
-import type { DehydratedState } from '@tanstack/query-core'
-
-export function PageHydration({
-  children,
-  dehydratedQueryClient,
-  serializedScope,
-}: {
-  children: React.ReactNode
-  dehydratedQueryClient: DehydratedState
-  serializedScope: Record<string, unknown>
-}) {
-  return (
-    <HydrationBoundary state={dehydratedQueryClient}>
-      <EffectorNext values={serializedScope}>{children}</EffectorNext>
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <EffectorNext values={serialize(scope)}>
+        <PageBody />
+      </EffectorNext>
     </HydrationBoundary>
   )
 }
 ```
 
+Both `<HydrationBoundary>` and `<EffectorNext>` are client components imported directly into the server page — Next handles the RSC boundary, and the dehydrated/serialized props travel through the RSC payload.
+
 How the pieces fit:
 
 - **Layout's `<EffectorNext>`** owns a singleton client scope, alive for the whole browser session.
 - **Top-level `await allSettled($queryClient, ...)`** injects the singleton `QueryClient` into that scope once, before any render.
-- **Per page, `<PageHydration>`** runs both hydration steps:
-  - `<HydrationBoundary state={dehydratedQueryClient}>` merges the server's query cache into the singleton qc.
-  - `<EffectorNext values={serializedScope}>` merges the server's effector store snapshots into the singleton scope.
+- **Per page, two hydration steps run during render:**
+  - `<HydrationBoundary state={dehydrate(queryClient)}>` merges the server's query cache into the singleton qc.
+  - `<EffectorNext values={serialize(scope)}>` merges the server's effector store snapshots into the singleton scope.
 - The singleton scope means navigating between routes preserves any client-side effector state (selected filters, accumulators, …); the singleton qc means the cache survives navigation and dedupes across pages.
 
 A complete working example lives in [`examples/ssr`](https://github.com/ilyaagarkov/effector-tanstack-query/tree/master/examples/ssr).
