@@ -1,7 +1,8 @@
-'use client'
+"use client";
 
-import { useUnit } from 'effector-react'
-import { useQuery } from '@effector-tanstack-query/react'
+import Link from "next/link";
+import { useUnit } from "effector-react";
+import { useQuery } from "@effector-tanstack-query/react";
 import {
   $name,
   $page,
@@ -10,7 +11,7 @@ import {
   nameChanged,
   pageChanged,
   pokemonQuery,
-} from '@/model/queries'
+} from "@/model/queries";
 
 export function PageBody() {
   return (
@@ -18,39 +19,49 @@ export function PageBody() {
       <h1>SSR example — effector-tanstack-query</h1>
       <p className="muted">
         Both queries are <strong>prefetched on the server</strong> via the
-        per-request scope, then hydrated on the client. There's no loading
-        flash on initial paint — open DevTools "Network", reload, and watch
-        the first paint already have data.
+        per-request scope, then hydrated on the client. There's no loading flash
+        on initial paint — open DevTools "Network", reload, and watch the first
+        paint already have data.
       </p>
       <p className="muted">
-        Once hydrated, the queries are reactive: change the dropdown / page
-        and the model re-fetches via the client's QueryClient.
+        Once hydrated, the queries are reactive: change the dropdown / page and
+        the model re-fetches via the client's QueryClient.
       </p>
 
       <SinglePokemon />
       <PokemonList />
 
       <h3>How it's wired</h3>
-      <pre>{`// server (app/page.tsx)
-const { queryClient, scope } = makeRequestScope()
-await prefetch(scope, queryClient, [listQuery.mounted, pokemonQuery.mounted])
-const { dehydratedQueryClient, serializedScope } = serializeBoth(...)
+      <pre>{`// app/layout.tsx — singleton QueryClient + scope (via @effector/next)
+<Providers>{children}</Providers>
 
-// client (hydration-provider.tsx)
-const scope = fork({
-  values: {
-    ...serializedScope,
-    '@tanstack/query-effector.$queryClient': queryClient,
-  }
-})
-<Provider value={scope}>{children}</Provider>`}</pre>
+// src/lib/providers.tsx (client)
+const [queryClient] = useState(() => new QueryClient(...))
+<EffectorNext values={{ '@tanstack/query-effector.$queryClient': queryClient }}>
+  {children}
+</EffectorNext>
+
+// app/page.tsx (server)
+const { queryClient, scope } = makeRequestScope()
+await prefetch(scope, queryClient, [listQuery, pokemonQuery])
+
+<PageHydration
+  dehydratedQueryClient={dehydrate(queryClient)}
+  serializedScope={serialize(scope)}
+>
+  <PageBody />
+</PageHydration>
+
+// src/lib/hydration-provider.tsx (client)
+hydrate(queryClient, dehydratedQueryClient)
+<EffectorNext values={serializedScope}>{children}</EffectorNext>`}</pre>
     </main>
-  )
+  );
 }
 
 function SinglePokemon() {
-  const { data, isPending, isFetching, error } = useQuery(pokemonQuery)
-  const [name, setName] = useUnit([$name, nameChanged])
+  const { data, isPending, isFetching, error } = useQuery(pokemonQuery);
+  const [name, setName] = useUnit([$name, nameChanged]);
 
   return (
     <section className="card">
@@ -58,7 +69,7 @@ function SinglePokemon() {
       <div className="row">
         <label>name:</label>
         <select value={name} onChange={(e) => setName(e.target.value)}>
-          {['pikachu', 'bulbasaur', 'charmander', 'squirtle', 'mewtwo'].map(
+          {["pikachu", "bulbasaur", "charmander", "squirtle", "mewtwo"].map(
             (n) => (
               <option key={n} value={n}>
                 {n}
@@ -82,18 +93,18 @@ function SinglePokemon() {
               height {data.height} · weight {data.weight}
             </div>
             <div className="muted">
-              types: {data.types.map((t) => t.type.name).join(', ')}
+              types: {data.types.map((t) => t.type.name).join(", ")}
             </div>
           </div>
         </div>
       )}
     </section>
-  )
+  );
 }
 
 function PokemonList() {
-  const { data, isFetching } = useQuery(listQuery)
-  const [page, setPage] = useUnit([$page, pageChanged])
+  const { data, isFetching } = useQuery(listQuery);
+  const [page, setPage] = useUnit([$page, pageChanged]);
 
   return (
     <section className="card">
@@ -117,11 +128,11 @@ function PokemonList() {
         <div className="list" style={{ marginTop: 12 }}>
           {data.results.map((p) => (
             <div key={p.name} className="list-item">
-              {p.name}
+              <Link href={`/pokemon/${p.name}`}>{p.name}</Link>
             </div>
           ))}
         </div>
       )}
     </section>
-  )
+  );
 }

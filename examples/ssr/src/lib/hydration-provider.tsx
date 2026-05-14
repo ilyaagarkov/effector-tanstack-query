@@ -1,11 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { Provider } from 'effector-react'
-import { QueryClient, hydrate } from '@tanstack/query-core'
-import { fork } from 'effector'
-import { setQueryClient } from '@effector-tanstack-query/core'
-import type { Scope } from 'effector'
+import { EffectorNext } from '@effector/next'
+import { HydrationBoundary } from '@effector-tanstack-query/react'
 import type { DehydratedState } from '@tanstack/query-core'
 
 interface Props {
@@ -14,43 +11,27 @@ interface Props {
   serializedScope: Record<string, unknown>
 }
 
-// SID of $queryClient — assigned in the library so that fork({ values })
-// can inject it through the object form alongside serialized stores.
-const QUERY_CLIENT_SID = '@tanstack/query-effector.$queryClient'
-
 /**
- * Boots the client-side scope from the SSR payload. Runs **once** per
- * page mount in the browser:
- *   1. Construct a fresh QueryClient + call `.mount()`.
- *   2. Hydrate the cache from the server's dehydrate() output.
- *   3. `fork({ values })` with both the serialized stores AND the new
- *      QueryClient (keyed by `$queryClient`'s sid). This way the scope's
- *      `$queryClient` is non-null from the very first synchronous render —
- *      Suspense in the hydrated tree just works.
- *   4. `setQueryClient(qc)` also sets the global default, so anything
- *      constructed outside this scope can still resolve a client.
- *   5. Render with `<Provider value={scope}>`.
+ * Per-page bridge between server snapshots and the singleton client state:
+ *
+ *   - `<HydrationBoundary state={...}>` from `@effector-tanstack-query/react`
+ *     merges the dehydrated QueryClient cache into the scope's QueryClient
+ *     (read via `useUnit($queryClient)` internally — mirrors tanstack's API).
+ *   - `<EffectorNext values={...}>` merges serialized effector store
+ *     snapshots into the singleton scope.
+ *
+ * Both run inside the render phase, so children render on first paint with
+ * a populated cache AND populated stores — no loading flash, no hydration
+ * mismatch.
  */
-export function HydrationProvider({
+export function PageHydration({
   children,
   dehydratedQueryClient,
   serializedScope,
 }: Props) {
-  const [scope] = React.useState<Scope>(() => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
-    })
-    queryClient.mount()
-    hydrate(queryClient, dehydratedQueryClient)
-    setQueryClient(queryClient)
-
-    return fork({
-      values: {
-        ...serializedScope,
-        [QUERY_CLIENT_SID]: queryClient,
-      },
-    })
-  })
-
-  return <Provider value={scope}>{children}</Provider>
+  return (
+    <HydrationBoundary state={dehydratedQueryClient}>
+      <EffectorNext values={serializedScope}>{children}</EffectorNext>
+    </HydrationBoundary>
+  )
 }

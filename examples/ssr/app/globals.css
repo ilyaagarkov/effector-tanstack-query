@@ -107,3 +107,23 @@ pre {
   padding: 8px 12px;
   text-transform: capitalize;
 }
+.list-item a {
+  color: inherit;
+  display: block;
+}
+.list-item:hover {
+  background: #232934;
+}
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: #14171c;
+  border-bottom: 1px solid #1f2530;
+  text-transform: capitalize;
+}

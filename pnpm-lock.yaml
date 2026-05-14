@@ -123,6 +123,9 @@ importers:
       '@effector-tanstack-query/react':
         specifier: ^0.1.1
         version: link:../../packages/react
+      '@effector/next':
+        specifier: ^0.7.2
+        version: 0.7.2(effector-react@23.3.0(effector@23.4.4)(react@19.2.5))(effector@23.4.4)(react@19.2.5)
       '@tanstack/query-core':
         specifier: ^5.0.0
         version: 5.100.6
@@ -360,6 +363,13 @@ packages:
   '@ctrl/tinycolor@4.2.0':
     resolution: {integrity: sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A==}
     engines: {node: '>=14'}
+
+  '@effector/next@0.7.2':
+    resolution: {integrity: sha512-lcYbZHiriFIncIAG5EZow8vSqxvWrLwUwHXTkzgRfeqvuEw+OPay8XuB17y6u0S7MvObR6H7ER5/wmzs1HSCkA==}
+    peerDependencies:
+      effector: ^22.8.6 || ^23.0.0
+      effector-react: ^22.5.4 || ^23.0.0
+      react: ^18.2.0 || ^19.0.0
 
   '@emnapi/runtime@1.10.0':
     resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
@@ -3674,6 +3684,12 @@ snapshots:
   '@csstools/css-tokenizer@4.0.0': {}
 
   '@ctrl/tinycolor@4.2.0': {}
+
+  '@effector/next@0.7.2(effector-react@23.3.0(effector@23.4.4)(react@19.2.5))(effector@23.4.4)(react@19.2.5)':
+    dependencies:
+      effector: 23.4.4
+      effector-react: 23.3.0(effector@23.4.4)(react@19.2.5)
+      react: 19.2.5
 
   '@emnapi/runtime@1.10.0':
     dependencies:
