@@ -309,4 +309,119 @@ describe('createQuery', () => {
     await vi.advanceTimersByTimeAsync(150)
     expect(fetchCount).toBeGreaterThan(beforeStop)
   })
+
+  // Internal: useSuspenseQuery (in the React package) constructs a transient
+  // observer via `__createObserver` when `mountFx` hasn't yet populated the
+  // scope's `$observer` (mountFx runs from useEffect, which is skipped while
+  // the component is suspended). Cover it from the core package so it stays
+  // exercised even outside the React entry point.
+  it('exposes __createObserver internal for the suspense helper', () => {
+    const query = createQuery<string>(queryClient, {
+      name: 'query.transientObserver',
+      queryKey: queryKey(),
+      queryFn: () => Promise.resolve('hello'),
+    })
+
+    const factory = query as typeof query & {
+      __createObserver: (
+        qc: QueryClient,
+        init: { queryKey: unknown; enabled: boolean },
+      ) => { options: { queryKey: unknown }; destroy: () => void }
+    }
+
+    const observer = factory.__createObserver(queryClient, {
+      queryKey: ['transient'],
+      enabled: true,
+    })
+
+    expect(observer.options.queryKey).toEqual(['transient'])
+    observer.destroy()
+  })
+
+  it('unmount destroys the observer and resets $isMounted to false', async () => {
+    const query = createQuery<string>(queryClient, {
+      name: 'query.unmountObserver',
+      queryKey: queryKey(),
+      queryFn: () => sleep(5).then(() => 'data'),
+    })
+    const scope = fork()
+
+    await allSettled(query.mounted, { scope })
+    await vi.advanceTimersByTimeAsync(6)
+    expect(scope.getState(query.$observer)).not.toBeNull()
+
+    await allSettled(query.unmounted, { scope })
+    // unmountFx ran: subscription torn down, observer.destroy() called,
+    // $observer cleared.
+    expect(scope.getState(query.$observer)).toBeNull()
+  })
+
+  it('unmount is a safe no-op when the query was never mounted', async () => {
+    const query = createQuery(queryClient, {
+      name: 'query.unmountNoMount',
+      queryKey: queryKey(),
+      queryFn: () => Promise.resolve('x'),
+    })
+    const scope = fork()
+    // $observer is null — unmountFx's `if (!observer) return` early path.
+    await allSettled(query.unmounted, { scope })
+    expect(scope.getState(query.$observer)).toBeNull()
+  })
+
+  it('refresh is a no-op when no QueryClient is set in scope or as default', async () => {
+    // Single-arg form — falls back to $queryClient. No qc injection →
+    // refreshFx hits `if (!qc) return`.
+    const query = createQuery({
+      name: 'query.refreshNoClient',
+      queryKey: queryKey(),
+      queryFn: () => Promise.resolve('x'),
+    })
+    const scope = fork()
+    await allSettled(query.refresh, { scope })
+    expect(scope.getState(query.$status)).toBe('pending')
+  })
+
+  it('reactive key change after a failed mount is a no-op (observer null)', async () => {
+    // mounted event flips $isMounted to true even when mountFx throws
+    // (no qc). A subsequent reactive-key change then triggers updateObserverFx
+    // with $isMounted=true but $observer=null — covers the `if (!observer)
+    // return` guard inside updateObserverFx.
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+
+    const setId = createEvent<number>()
+    const $id = createStore(1).on(setId, (_, v) => v)
+    const query = createQuery({
+      name: 'query.updateNoObserver',
+      queryKey: ['x', $id],
+      queryFn: () => Promise.resolve('x'),
+    })
+
+    const scope = fork() // no qc
+    await allSettled(query.mounted, { scope })
+    // mountFx threw → $observer is still null
+    expect(scope.getState(query.$observer)).toBeNull()
+
+    // Reactive-key change → updateObserverFx fires, finds null observer,
+    // takes the early-return path. No throw.
+    await allSettled(setId, { scope, params: 2 })
+    expect(scope.getState(query.$observer)).toBeNull()
+
+    consoleError.mockRestore()
+  })
+
+  it('does not throw when created without a `name` (covers warn branch)', () => {
+    // warnMissingName uses a module-level Set so the warn fires at most
+    // once per role across the whole test process — we only need to hit
+    // the `if (!name)` branch here, not assert the warning.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(() =>
+      createQuery({
+        queryKey: ['no-name-query'],
+        queryFn: () => Promise.resolve('x'),
+      }),
+    ).not.toThrow()
+    warn.mockRestore()
+  })
 })

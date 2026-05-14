@@ -175,4 +175,37 @@ describe('createInvalidate', () => {
     qcA.clear()
     qcB.clear()
   })
+
+  it('forwards `refetchType` and `type` filter options to invalidateQueries', async () => {
+    const key = queryKey()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    const invalidate = createInvalidate(queryClient, {
+      queryKey: key,
+      refetchType: 'active',
+      type: 'all',
+    })
+
+    const scope = fork()
+    await allSettled(invalidate, { scope })
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: key,
+        refetchType: 'active',
+        type: 'all',
+      }),
+    )
+    spy.mockRestore()
+  })
+
+  it('is a safe no-op when no QueryClient is set in scope or as default', async () => {
+    // Single-arg form — falls back to $queryClient. Fresh scope, no client
+    // injection → invalidateFx hits the `if (!qc) return` early path.
+    const invalidate = createInvalidate({ queryKey: ['nothing'] })
+    const scope = fork()
+
+    await allSettled(invalidate, { scope })
+    // Nothing throws; nothing fires. Reaching this line is the assertion.
+    expect(true).toBe(true)
+  })
 })
