@@ -1,3 +1,5 @@
+'use client'
+
 import * as React from 'react'
 import { useUnit } from 'effector-react'
 import { hydrate } from '@tanstack/query-core'
