@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@effector-tanstack-query/core": "^0.1.1",
-    "@effector-tanstack-query/react": "^0.1.1",
+    "@effector-tanstack-query/core": "^0.2.0",
+    "@effector-tanstack-query/react": "^0.2.0",
     "@effector/next": "^0.7.2",
     "@tanstack/query-core": "^5.0.0",
     "effector": "^23.4.4",
