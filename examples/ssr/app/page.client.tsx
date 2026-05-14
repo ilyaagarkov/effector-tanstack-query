@@ -35,15 +35,18 @@ export function PageBody() {
       <pre>{`// app/layout.tsx — singleton QueryClient + scope (via @effector/next)
 <Providers>{children}</Providers>
 
-// src/lib/providers.tsx (client)
-const [queryClient] = useState(() => new QueryClient(...))
-<EffectorNext values={{ '@tanstack/query-effector.$queryClient': queryClient }}>
-  {children}
-</EffectorNext>
+// src/lib/providers.tsx (client, module top-level)
+if (typeof window !== 'undefined') {
+  await allSettled($queryClient, {
+    params: getQueryClient(),
+    scope: getClientScope()!,
+  })
+}
+<EffectorNext>{children}</EffectorNext>
 
 // app/page.tsx (server)
 const { queryClient, scope } = makeRequestScope()
-await prefetch(scope, queryClient, [listQuery, pokemonQuery])
+await prefetchQueries([listQuery, pokemonQuery], { scope })
 
 <PageHydration
   dehydratedQueryClient={dehydrate(queryClient)}
@@ -53,8 +56,9 @@ await prefetch(scope, queryClient, [listQuery, pokemonQuery])
 </PageHydration>
 
 // src/lib/hydration-provider.tsx (client)
-hydrate(queryClient, dehydratedQueryClient)
-<EffectorNext values={serializedScope}>{children}</EffectorNext>`}</pre>
+<HydrationBoundary state={dehydratedQueryClient}>
+  <EffectorNext values={serializedScope}>{children}</EffectorNext>
+</HydrationBoundary>`}</pre>
     </main>
   );
 }
