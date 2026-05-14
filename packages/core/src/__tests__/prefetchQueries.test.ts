@@ -76,8 +76,7 @@ describe('prefetchQueries', () => {
       staleTime: Infinity,
     })
 
-    const feed = createInfiniteQuery({
-      queryClient,
+    const feed = createInfiniteQuery(queryClient, {
       name: 'prefetchQueries.feed',
       queryKey: ['feed'],
       queryFn: ({ pageParam }) =>
