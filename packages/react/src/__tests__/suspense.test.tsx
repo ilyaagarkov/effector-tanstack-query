@@ -179,6 +179,44 @@ describe('useSuspenseQuery', () => {
 
     rendered.getByText('data: id-2')
   })
+
+  it('throws a helpful error if no QueryClient is set anywhere', async () => {
+    // Factory created without an explicit QC — falls back to the global
+    // `$queryClient`, which is null in a fresh scope. Both `observerInScope`
+    // (mount hasn't run yet under Suspense) and the transient observer
+    // (needs a qc) are null → useSuspenseObserver throws.
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+
+    const query = createQuery<string>({
+      name: 'suspense.noClient',
+      queryKey: queryKey(),
+      queryFn: () => Promise.resolve('x'),
+    })
+
+    function Page() {
+      const { data } = useSuspenseQuery(query)
+      return <span>{data}</span>
+    }
+
+    const scope = fork() // no $queryClient injection
+
+    const rendered = renderWithScope(
+      scope,
+      <ErrorBoundary fallback={(e) => <span>boundary: {e.message}</span>}>
+        <React.Suspense fallback={<span>loading</span>}>
+          <Page />
+        </React.Suspense>
+      </ErrorBoundary>,
+    )
+
+    // The error message is pinned in the source — assert a stable substring.
+    const match = rendered.container.textContent ?? ''
+    expect(match).toMatch(/no QueryClient is set/)
+
+    consoleError.mockRestore()
+  })
 })
 
 describe('useSuspenseInfiniteQuery', () => {

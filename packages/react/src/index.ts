@@ -239,14 +239,11 @@ export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
 // The mount/unmount effect is still wired up so that other consumers reading
 // the same query through `useUnit` / `useQuery` see updates in scope state.
 
-function useObserverRerender(
-  observer: { subscribe: (cb: () => void) => () => void } | null,
-): void {
+function useObserverRerender(observer: {
+  subscribe: (cb: () => void) => () => void
+}): void {
   const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
-  React.useEffect(() => {
-    if (!observer) return
-    return observer.subscribe(forceRender)
-  }, [observer])
+  React.useEffect(() => observer.subscribe(forceRender), [observer])
 }
 
 interface SuspenseFactory<TObserver> {
