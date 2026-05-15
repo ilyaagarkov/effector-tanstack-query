@@ -2,6 +2,7 @@ import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient } from '@tanstack/query-core'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { setQueryClient } from '@effector-tanstack-query/core'
 import { App } from './app'
 import './styles.css'
@@ -38,6 +39,9 @@ async function start() {
       <BrowserRouter>
         <App />
       </BrowserRouter>
+      {import.meta.env.DEV && (
+        <ReactQueryDevtools client={queryClient} initialIsOpen={false} />
+      )}
     </React.StrictMode>,
   )
 }

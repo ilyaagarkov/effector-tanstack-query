@@ -1,10 +1,22 @@
-'use client'
+"use client";
 
-import * as React from 'react'
-import { EffectorNext, getClientScope } from '@effector/next'
-import { allSettled } from 'effector'
-import { QueryClient } from '@tanstack/query-core'
-import { $queryClient, setQueryClient } from '@effector-tanstack-query/core'
+import * as React from "react";
+import dynamic from "next/dynamic";
+import { EffectorNext, getClientScope } from "@effector/next";
+import { allSettled } from "effector";
+import { QueryClient } from "@tanstack/query-core";
+import { $queryClient, setQueryClient } from "@effector-tanstack-query/core";
+import { useUnit } from "effector-react";
+
+// Client-only devtools: avoids hydration mismatch on the floating button DOM,
+// and keeps the devtools bundle out of the server payload.
+const ReactQueryDevtools = dynamic(
+  () =>
+    import("@tanstack/react-query-devtools").then((m) => ({
+      default: m.ReactQueryDevtools,
+    })),
+  { ssr: false },
+);
 
 /**
  * Top-level module side effect: imported by `app/layout.tsx`, so it runs
@@ -26,16 +38,30 @@ import { $queryClient, setQueryClient } from '@effector-tanstack-query/core'
  * `$queryClient` is non-null — `useUnit($queryClient)` and observers
  * resolving via `attach` both see the same browser QueryClient.
  */
-const clientScope = getClientScope()
+let browserQueryClient: QueryClient | undefined;
+const clientScope = getClientScope();
+console.log({ clientScope });
 if (clientScope) {
-  const queryClient = new QueryClient({
+  browserQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
-  })
-  queryClient.mount()
-  setQueryClient(queryClient)
-  void allSettled($queryClient, { params: queryClient, scope: clientScope })
+  });
+  browserQueryClient.mount();
+  setQueryClient(browserQueryClient);
+  void allSettled($queryClient, {
+    params: browserQueryClient,
+    scope: clientScope,
+  });
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <EffectorNext>{children}</EffectorNext>
+  const qc = useUnit($queryClient);
+
+  console.log({ qc });
+
+  return (
+    <EffectorNext>
+      {children}
+      <ReactQueryDevtools client={qc!} initialIsOpen={false} />
+    </EffectorNext>
+  );
 }
