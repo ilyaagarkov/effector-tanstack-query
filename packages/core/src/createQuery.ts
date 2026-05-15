@@ -3,37 +3,46 @@ import { QueryObserver } from '@tanstack/query-core'
 import type { QueryClient } from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
 import { resolveReactiveRefetchInterval } from './resolve'
-import type { CreateQueryOptions, QueryResult } from './types'
+import type {
+  CreateQueryOptions,
+  EffectorQueryKey,
+  QueryResult,
+} from './types'
 
 export function createQuery<
   TQueryFnData = unknown,
   TError = Error,
   TData = TQueryFnData,
+  const TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 >(
-  options: CreateQueryOptions<TQueryFnData, TError, TData>,
+  options: CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
 ): QueryResult<TData, TError>
 export function createQuery<
   TQueryFnData = unknown,
   TError = Error,
   TData = TQueryFnData,
+  const TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 >(
   queryClient: QueryClient,
-  options: CreateQueryOptions<TQueryFnData, TError, TData>,
+  options: CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
 ): QueryResult<TData, TError>
 export function createQuery<
   TQueryFnData = unknown,
   TError = Error,
   TData = TQueryFnData,
+  const TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 >(
   arg1:
     | QueryClient
-    | CreateQueryOptions<TQueryFnData, TError, TData>,
-  arg2?: CreateQueryOptions<TQueryFnData, TError, TData>,
+    | CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  arg2?: CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
 ): QueryResult<TData, TError> {
-  const [explicitClient, options] = parseQueryArgs<TQueryFnData, TError, TData>(
-    arg1,
-    arg2,
-  )
+  const [explicitClient, options] = parseQueryArgs<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryKey
+  >(arg1, arg2)
   const { queryKey, enabled, name, ...restOptions } = options
 
   if (!name) warnMissingName('createQuery')
@@ -142,14 +151,25 @@ export function createQuery<
   return result
 }
 
-function parseQueryArgs<TQueryFnData, TError, TData>(
+function parseQueryArgs<
+  TQueryFnData,
+  TError,
+  TData,
+  TQueryKey extends EffectorQueryKey,
+>(
   arg1:
     | QueryClient
-    | CreateQueryOptions<TQueryFnData, TError, TData>,
-  arg2?: CreateQueryOptions<TQueryFnData, TError, TData>,
-): [QueryClient | null, CreateQueryOptions<TQueryFnData, TError, TData>] {
+    | CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  arg2?: CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+): [
+  QueryClient | null,
+  CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+] {
   if (arg2 !== undefined) {
     return [arg1 as QueryClient, arg2]
   }
-  return [null, arg1 as CreateQueryOptions<TQueryFnData, TError, TData>]
+  return [
+    null,
+    arg1 as CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  ]
 }

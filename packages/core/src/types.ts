@@ -28,15 +28,48 @@ export type EffectorQueryKey = ReadonlyArray<
   StoreOrValue<string | number | bigint | boolean | null | undefined | object>
 >
 
+/**
+ * Resolves a single `EffectorQueryKey` element to its runtime value type:
+ * `Store<T>` → `T`, everything else is left as-is. Used by `ResolvedQueryKey`
+ * so `queryFn`'s context can present `queryKey` with stores already unwrapped.
+ */
+export type ResolveQueryKeyElement<T> = T extends Store<infer U> ? U : T
+
+/**
+ * Tuple-aware mapping that walks an `EffectorQueryKey` and replaces each
+ * `Store<T>` with `T`, preserving tuple shape (length, readonly-ness, element
+ * positions). Drives the `TQueryKey` generic of `CreateQueryOptions` so the
+ * `queryFn({ queryKey })` parameter is typed with the resolved values:
+ *
+ * ```ts
+ * const $name = createStore<string>('pikachu')
+ * createQuery({
+ *   queryKey: ['pokemon', $name],
+ *   queryFn: ({ queryKey }) => fetchByName(queryKey[1]),
+ *   //                                     ^ string — no cast needed
+ * })
+ * ```
+ */
+export type ResolvedQueryKey<T extends ReadonlyArray<unknown>> = {
+  readonly [K in keyof T]: ResolveQueryKeyElement<T[K]>
+}
+
 export interface CreateQueryOptions<
   TQueryFnData = unknown,
   TError = Error,
   TData = TQueryFnData,
+  TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 > extends Omit<
-  QueryObserverOptions<TQueryFnData, TError, TData>,
+  QueryObserverOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    ResolvedQueryKey<TQueryKey>
+  >,
   'queryKey' | 'enabled' | 'refetchInterval'
 > {
-  queryKey: EffectorQueryKey
+  queryKey: TQueryKey
   enabled?: StoreOrValue<boolean>
   /**
    * Polling interval in milliseconds, `false` to disable, or a Store for
@@ -46,7 +79,13 @@ export interface CreateQueryOptions<
    * from TanStack Query is also still supported.
    */
   refetchInterval?:
-    | QueryObserverOptions<TQueryFnData, TError, TData>['refetchInterval']
+    | QueryObserverOptions<
+        TQueryFnData,
+        TError,
+        TData,
+        TQueryFnData,
+        ResolvedQueryKey<TQueryKey>
+      >['refetchInterval']
     | Store<number | false | undefined>
   /**
    * Stable name used to derive SIDs for the internal effector stores so that
@@ -128,17 +167,18 @@ export interface CreateInfiniteQueryOptions<
   TError = Error,
   TPageParam = unknown,
   TData = InfiniteData<TQueryFnData, TPageParam>,
+  TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 > extends Omit<
   InfiniteQueryObserverOptions<
     TQueryFnData,
     TError,
     TData,
-    ReadonlyArray<unknown>,
+    ResolvedQueryKey<TQueryKey>,
     TPageParam
   >,
   'queryKey' | 'enabled' | 'refetchInterval'
 > {
-  queryKey: EffectorQueryKey
+  queryKey: TQueryKey
   enabled?: StoreOrValue<boolean>
   /** See {@link CreateQueryOptions.refetchInterval}. */
   refetchInterval?:
@@ -146,7 +186,7 @@ export interface CreateInfiniteQueryOptions<
         TQueryFnData,
         TError,
         TData,
-        ReadonlyArray<unknown>,
+        ResolvedQueryKey<TQueryKey>,
         TPageParam
       >['refetchInterval']
     | Store<number | false | undefined>
