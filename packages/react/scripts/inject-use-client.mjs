@@ -12,7 +12,7 @@ import { dirname, resolve } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const dist = resolve(here, '..', 'dist')
 
-for (const file of ['index.js', 'index.cjs']) {
+for (const file of ['index.js', 'index.cjs', 'compat.js', 'compat.cjs']) {
   const path = resolve(dist, file)
   const contents = readFileSync(path, 'utf8')
   if (contents.startsWith('"use client"') || contents.startsWith("'use client'")) {

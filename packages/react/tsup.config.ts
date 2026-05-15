@@ -2,7 +2,7 @@ import { defineConfig } from 'tsup'
 import { esbuildPluginFilePathExtensions } from 'esbuild-plugin-file-path-extensions'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/compat.tsx'],
   format: ['cjs', 'esm'],
   target: ['es2020', 'node18'],
   outDir: 'dist',
@@ -14,6 +14,15 @@ export default defineConfig({
   clean: true,
   splitting: false,
   treeshake: true,
-  external: ['@effector-tanstack-query/core', 'effector', 'effector-react', 'react'],
+  // `@tanstack/react-query` is optional — only `./compat` imports it, and
+  // `peerDependenciesMeta` marks it optional so non-migrating users don't
+  // need it installed.
+  external: [
+    '@effector-tanstack-query/core',
+    '@tanstack/react-query',
+    'effector',
+    'effector-react',
+    'react',
+  ],
   esbuildPlugins: [esbuildPluginFilePathExtensions({ esmExtension: 'js' })],
 })
