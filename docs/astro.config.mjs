@@ -75,7 +75,16 @@ export default defineConfig({
             { label: 'Queries', slug: 'guides/queries' },
             { label: 'Mutations', slug: 'guides/mutations' },
             { label: 'Infinite queries', slug: 'guides/infinite-queries' },
-            { label: 'SSR', slug: 'guides/ssr' },
+            {
+              label: 'SSR',
+              items: [
+                { label: 'Overview', slug: 'guides/ssr' },
+                {
+                  label: 'Migrating from @tanstack/react-query',
+                  slug: 'guides/ssr/migration',
+                },
+              ],
+            },
             { label: 'Suspense', slug: 'guides/suspense' },
             { label: 'Naming & SIDs', slug: 'guides/naming-and-sids' },
           ],

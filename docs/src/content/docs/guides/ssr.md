@@ -65,14 +65,13 @@ const scope = fork({
 ReactDOM.hydrateRoot(
   document.getElementById('root'),
   <Provider value={scope}>
-    <HydrationBoundary state={dehydratedQueryClient}>
-      <App />
-    </HydrationBoundary>
+    <HydrationBoundary state={dehydratedQueryClient} />
+    <App />
   </Provider>,
 )
 ```
 
-`<HydrationBoundary>` reads the QueryClient from the scope (`useUnit($queryClient)`) and calls `hydrate(qc, state)` inside `useMemo` — so by the time `<App />` renders, the cache is populated and observers find data instead of triggering fresh fetches. See [the API reference](/effector-tanstack-query/react/hydration-boundary/) for details.
+`<HydrationBoundary>` reads the QueryClient from the scope (`useUnit($queryClient)`) and calls `hydrate(qc, state)` inside `useMemo` — render-phase side effect. Rendered as a **sibling** of `<App />` rather than a wrapper: React renders sibling children top-to-bottom, so by the time `<App />` reaches its first `useQuery`, the cache is already populated. See [the API reference](/effector-tanstack-query/react/hydration-boundary/) for details.
 
 ## Next.js (App Router)
 
@@ -136,11 +135,10 @@ export default async function Home() {
   await prefetchQueries([listQuery, pokemonQuery], { scope })
 
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <EffectorNext values={serialize(scope)}>
-        <PageBody />
-      </EffectorNext>
-    </HydrationBoundary>
+    <EffectorNext values={serialize(scope)}>
+      <HydrationBoundary state={dehydrate(queryClient)} />
+      <PageBody />
+    </EffectorNext>
   )
 }
 ```
@@ -151,9 +149,10 @@ How the pieces fit:
 
 - **Layout's `<EffectorNext>`** owns a singleton client scope, alive for the whole browser session.
 - **Top-level `await allSettled($queryClient, ...)`** injects the singleton `QueryClient` into that scope once, before any render.
-- **Per page, two hydration steps run during render:**
-  - `<HydrationBoundary state={dehydrate(queryClient)}>` merges the server's query cache into the singleton qc.
-  - `<EffectorNext values={serialize(scope)}>` merges the server's effector store snapshots into the singleton scope.
+- **Per page, two hydration steps run during render** — both as direct children of `<EffectorNext>`:
+  - `<HydrationBoundary state={dehydrate(queryClient)} />` (sibling, side effect) merges the server's query cache into the singleton qc.
+  - `<EffectorNext values={serialize(scope)}>` (wrapper) merges the server's effector store snapshots into the singleton scope while also providing context to descendants.
+- Render order top-to-bottom puts the `hydrate(...)` call before `<PageBody />`'s first `useQuery`, so consumers find a populated cache on the very first paint.
 - The singleton scope means navigating between routes preserves any client-side effector state (selected filters, accumulators, …); the singleton qc means the cache survives navigation and dedupes across pages.
 
 A complete working example lives in [`examples/ssr`](https://github.com/ilyaagarkov/effector-tanstack-query/tree/master/examples/ssr).
@@ -198,3 +197,7 @@ createQuery({
   staleTime: 60_000, // or Infinity, or whatever your server-side data freshness allows
 })
 ```
+
+## Related
+
+- [Migrating from `@tanstack/react-query`](/effector-tanstack-query/guides/ssr/migration/) — run both libraries side-by-side on a shared `QueryClient` while you migrate components route-by-route, with full SSR (`<QueryClientCompatProvider>` + vanilla `<HydrationBoundary>`).

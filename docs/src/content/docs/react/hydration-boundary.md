@@ -6,16 +6,19 @@ description: Merges a server-prefetched DehydratedState into the scope's QueryCl
 ```tsx
 import { HydrationBoundary } from '@effector-tanstack-query/react'
 
-function PageRoot({ dehydratedState, children }) {
+function PageRoot({ dehydratedState, scope, children }) {
   return (
-    <HydrationBoundary state={dehydratedState}>
+    <Provider value={scope}>
+      <HydrationBoundary state={dehydratedState} />
       {children}
-    </HydrationBoundary>
+    </Provider>
   )
 }
 ```
 
 A direct analogue of [`<HydrationBoundary>`](https://tanstack.com/query/latest/docs/framework/react/reference/hydration#hydrationboundary) from `@tanstack/react-query` — but the `QueryClient` is read from the **effector scope** (`useUnit($queryClient)`), not from `QueryClientProvider` context. This matches how the rest of the library binds clients to scopes.
+
+`<HydrationBoundary>` is a **side-effect component**, not a wrapper. Render it as a sibling of your consumers — same parent, declared first. React renders sibling children top-to-bottom, so `hydrate(qc, state)` finishes before any descendant in the tree gets to call `useQuery`. The wrapper form (`<HydrationBoundary>{children}</HydrationBoundary>`) still works — it's the same hydration, just nested one level deeper — but the flat sibling form reads more naturally as "snapshot two layers, render the tree".
 
 ## Behavior
 
@@ -59,16 +62,16 @@ But you'd need to do it once, before any observer in the scope mounts and reads 
 // app/page.tsx — server component
 const queryClient = new QueryClient()
 const scope = fork({ values: [[$queryClient, queryClient]] })
-await allSettled(query.prefetch, { scope })
-await allSettled(query.mounted, { scope })
+await prefetchQueries([userQuery], { scope })
 
 return (
-  <HydrationBoundary state={dehydrate(queryClient)}>
-    <EffectorNext values={serialize(scope)}>
-      <PageBody />
-    </EffectorNext>
-  </HydrationBoundary>
+  <EffectorNext values={serialize(scope)}>
+    <HydrationBoundary state={dehydrate(queryClient)} />   {/* side effect */}
+    <PageBody />                                            {/* consumer */}
+  </EffectorNext>
 )
 ```
+
+`<EffectorNext>` provides the scope (so `useUnit($queryClient)` inside `<HydrationBoundary>` resolves to the client's QC). `<HydrationBoundary>` runs first as a sibling, calls `hydrate(qc, state)`, then `<PageBody />` renders with a populated cache.
 
 See [SSR](/effector-tanstack-query/guides/ssr/) for the full Next.js App Router walkthrough.
