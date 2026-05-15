@@ -52,7 +52,7 @@
     "test:types": "tsc --noEmit"
   },
   "dependencies": {
-    "@tanstack/query-core": "^5.0.0"
+    "@tanstack/query-core": "^5.100.10"
   },
   "peerDependencies": {
     "effector": ">=23.0.0"
