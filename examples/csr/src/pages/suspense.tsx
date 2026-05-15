@@ -11,7 +11,7 @@ const $name = createStore('bulbasaur').on(nameChanged, (_, n) => n)
 const pokemonQuery = createQuery({
   name: 'suspense.pokemon',
   queryKey: ['pokemon', $name],
-  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1] as string),
+  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1]),
   staleTime: 60_000,
 })
 

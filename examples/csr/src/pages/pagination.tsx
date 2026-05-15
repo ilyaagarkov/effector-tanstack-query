@@ -18,7 +18,7 @@ const listQuery = createQuery({
   name: 'pagination.list',
   queryKey: ['pokemon-list', $page],
   queryFn: ({ queryKey }) => {
-    const page = queryKey[1] as number
+    const page = queryKey[1]
     return fetchPokemonList(PAGE_SIZE, page * PAGE_SIZE)
   },
 })
@@ -65,7 +65,7 @@ export function PaginationPage() {
 
 const listQuery = createQuery({
   queryKey: ['pokemon-list', $page],   // ← reactive
-  queryFn: ({ queryKey }) => fetchPokemonList(20, (queryKey[1] as number) * 20),
+  queryFn: ({ queryKey }) => fetchPokemonList(20, queryKey[1] * 20),
 })`}</pre>
     </>
   )

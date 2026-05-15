@@ -10,7 +10,7 @@ const $name = createStore('pikachu').on(nameChanged, (_, n) => n)
 const pokemonQuery = createQuery({
   name: 'dependent.pokemon',
   queryKey: ['pokemon', $name],
-  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1] as string),
+  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1]),
 })
 
 // The first ability's URL is derived from pokemon data. We expose it as a
@@ -22,7 +22,13 @@ const $firstAbilityUrl = pokemonQuery.$data.map(
 const abilityQuery = createQuery({
   name: 'dependent.ability',
   queryKey: ['ability', $firstAbilityUrl],
-  queryFn: ({ queryKey }) => fetchAbilityByUrl(queryKey[1] as string),
+  queryFn: ({ queryKey }) => {
+    // queryKey[1] is `string | null` — `enabled` guards execution, but
+    // TS can't know that, so we narrow with a throw.
+    const url = queryKey[1]
+    if (!url) throw new Error('ability url not resolved yet')
+    return fetchAbilityByUrl(url)
+  },
   // Only run when the URL is known.
   enabled: pokemonQuery.$isSuccess,
 })
@@ -92,9 +98,13 @@ export function DependentPage() {
 const $firstAbilityUrl = pokemonQuery.$data.map(d => d?.abilities[0]?.ability.url ?? null)
 
 const abilityQuery = createQuery({
-  queryKey: ['ability', $firstAbilityUrl],
-  queryFn: ({ queryKey }) => fetchAbilityByUrl(queryKey[1] as string),
-  enabled: pokemonQuery.$isSuccess,        // ← run only after pokemon loads
+  queryKey: ['ability', $firstAbilityUrl],   // queryKey[1] inferred as string | null
+  queryFn: ({ queryKey }) => {
+    const url = queryKey[1]
+    if (!url) throw new Error('ability url not resolved yet')
+    return fetchAbilityByUrl(url)
+  },
+  enabled: pokemonQuery.$isSuccess,          // ← run only after pokemon loads
 })`}</pre>
     </>
   )

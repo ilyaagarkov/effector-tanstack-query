@@ -26,6 +26,6 @@ export const $detailName = createStore('pikachu', {
 export const pokemonDetailQuery = createQuery({
   name: 'detail.pokemon',
   queryKey: ['pokemon', $detailName],
-  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1] as string),
+  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1]),
   staleTime: 60_000,
 })

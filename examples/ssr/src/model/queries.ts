@@ -14,7 +14,7 @@ export const listQuery = createQuery({
   name: 'ssr.list',
   queryKey: ['pokemon-list', $page],
   queryFn: ({ queryKey }) => {
-    const page = queryKey[1] as number
+    const page = queryKey[1]
     return fetchPokemonList(PAGE_SIZE, page * PAGE_SIZE)
   },
   staleTime: 60_000,
@@ -27,6 +27,6 @@ export const $name = createStore('pikachu').on(nameChanged, (_, n) => n)
 export const pokemonQuery = createQuery({
   name: 'ssr.pokemon',
   queryKey: ['pokemon', $name],
-  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1] as string),
+  queryFn: ({ queryKey }) => fetchPokemonByName(queryKey[1]),
   staleTime: 60_000,
 })

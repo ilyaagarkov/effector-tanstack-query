@@ -17,7 +17,7 @@ const listQuery = createQuery({
   name: 'placeholder.list',
   queryKey: ['pokemon-list', $page],
   queryFn: ({ queryKey }) => {
-    const page = queryKey[1] as number
+    const page = queryKey[1]
     return fetchPokemonList(PAGE_SIZE, page * PAGE_SIZE)
   },
   // While fetching the next page, keep showing the previous page's data —
