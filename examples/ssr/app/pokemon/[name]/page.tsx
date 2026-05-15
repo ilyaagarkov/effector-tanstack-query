@@ -1,11 +1,11 @@
-import { dehydrate } from '@tanstack/query-core'
-import { allSettled, serialize } from 'effector'
-import { EffectorNext } from '@effector/next'
-import { HydrationBoundary } from '@effector-tanstack-query/react'
-import { prefetchQueries } from '@effector-tanstack-query/core'
-import { makeRequestScope } from '@/lib/server'
-import { detailNameSet, pokemonDetailQuery } from '@/model/pokemon-detail'
-import { DetailBody } from './page.client'
+import { dehydrate } from "@tanstack/query-core";
+import { allSettled, serialize } from "effector";
+import { EffectorNext } from "@effector/next";
+import { HydrationBoundary } from "@effector-tanstack-query/react";
+import { prefetchQueries } from "@effector-tanstack-query/core";
+import { makeRequestScope } from "@/lib/server";
+import { detailNameSet, pokemonDetailQuery } from "@/model/pokemon-detail";
+import { DetailBody } from "./page.client";
 
 /**
  * Dynamic route — `/pokemon/[name]`. Demonstrates per-request prefetch
@@ -18,27 +18,30 @@ import { DetailBody } from './page.client'
  *      `prefetchQueries`, so the queryFn runs against the URL name.
  *   3. `prefetchQueries(...)` fills both layers (cache + effector
  *      stores) for the resolved key.
- *   4. `<HydrationBoundary>` + `<EffectorNext>` merge both snapshots
- *      into the singleton browser state. The singleton QueryClient
- *      cache means repeat visits to the same name (or a name the home
- *      page already loaded) hit cache instantly.
+ *   4. `<HydrationBoundary state={dehydrate(qc)} />` — sibling side
+ *      effect inside `<EffectorNext>`: hydrates the QC cache during
+ *      render, before `<DetailBody />` is rendered. The singleton
+ *      QueryClient cache means repeat visits to the same name (or a
+ *      name the home page already loaded) hit cache instantly.
+ *   5. `<EffectorNext values={serialize(scope)}>` — provides the
+ *      hydrated scope to children (wraps because it's a context
+ *      provider, not just a side effect).
  */
 export default async function Page({
   params,
 }: {
-  params: Promise<{ name: string }>
+  params: Promise<{ name: string }>;
 }) {
-  const { name } = await params
-  const { queryClient, scope } = makeRequestScope()
+  const { name } = await params;
+  const { queryClient, scope } = makeRequestScope();
 
-  await allSettled(detailNameSet, { params: name, scope })
-  await prefetchQueries([pokemonDetailQuery], { scope })
+  await allSettled(detailNameSet, { params: name, scope });
+  await prefetchQueries([pokemonDetailQuery], { scope });
 
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <EffectorNext values={serialize(scope)}>
-        <DetailBody name={name} />
-      </EffectorNext>
-    </HydrationBoundary>
-  )
+    <EffectorNext values={serialize(scope)}>
+      <HydrationBoundary state={dehydrate(queryClient)} />
+      <DetailBody name={name} />
+    </EffectorNext>
+  );
 }

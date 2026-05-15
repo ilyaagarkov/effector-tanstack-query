@@ -48,11 +48,10 @@ if (typeof window !== 'undefined') {
 const { queryClient, scope } = makeRequestScope()
 await prefetchQueries([listQuery, pokemonQuery], { scope })
 
-<HydrationBoundary state={dehydrate(queryClient)}>
-  <EffectorNext values={serialize(scope)}>
-    <PageBody />
-  </EffectorNext>
-</HydrationBoundary>`}</pre>
+<EffectorNext values={serialize(scope)}>
+  <HydrationBoundary state={dehydrate(queryClient)} />   // side effect
+  <PageBody />                                           // consumer
+</EffectorNext>`}</pre>
     </main>
   );
 }
