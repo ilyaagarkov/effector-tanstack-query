@@ -1,45 +1,38 @@
-import { describe, expect, it, vi } from 'vitest'
-
-// Force the `isServer` path of `QueryClientCompatProvider` so the server
-// fallback `QueryClient` branch is exercised. Must be hoisted (vi.mock is
-// auto-hoisted) so the module under test sees the mocked value at import.
-vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-query')>()
-  return { ...actual, isServer: true }
-})
+// @vitest-environment node
+//
+// Node env (no jsdom) means `typeof window === 'undefined'` is genuinely
+// true at module load, so `isServer` from `@tanstack/react-query`
+// evaluates to `true` without any mocking. Deterministic in cold-start
+// CI runs (unlike `vi.mock` with an async factory, which can race the
+// import graph).
+import { describe, expect, it } from 'vitest'
+import { renderToString } from 'react-dom/server'
+import { Provider } from 'effector-react'
+import { fork } from 'effector'
+import { useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/query-core'
+import { QueryClientCompatProvider } from '../compat'
 
 describe('QueryClientCompatProvider (SSR fallback)', () => {
-  it('builds a per-render QueryClient when scope has no client and isServer is true', async () => {
-    const [{ render }, { Provider }, { fork }, { useQueryClient }, mod] =
-      await Promise.all([
-        import('@testing-library/react'),
-        import('effector-react'),
-        import('effector'),
-        import('@tanstack/react-query'),
-        import('../compat'),
-      ])
+  it('builds a per-render QueryClient when scope has no client and isServer is true', () => {
+    const scope = fork() // no $queryClient → useUnit returns null
 
-    const scope = fork() // no $queryClient → fromEffector is null
-
-    let captured: import('@tanstack/query-core').QueryClient | null = null
+    let captured: QueryClient | null = null
     function Probe() {
       captured = useQueryClient()
-      return <span>ok</span>
+      return null
     }
 
-    const rendered = render(
+    renderToString(
       <Provider value={scope}>
-        <mod.QueryClientCompatProvider
+        <QueryClientCompatProvider
           defaultOptions={{ queries: { staleTime: 999 } }}
         >
           <Probe />
-        </mod.QueryClientCompatProvider>
+        </QueryClientCompatProvider>
       </Provider>,
     )
 
-    rendered.getByText('ok')
-    // Fallback constructed via the `defaultOptions` we passed in.
     expect(captured).not.toBeNull()
     expect(captured!.getDefaultOptions().queries?.staleTime).toBe(999)
   })
