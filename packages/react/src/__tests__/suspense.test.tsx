@@ -8,7 +8,15 @@ import { queryKey, sleep } from './test-utils'
 import { createQuery } from '@effector-tanstack-query/core'
 import { createInfiniteQuery } from '@effector-tanstack-query/core'
 import { useSuspenseInfiniteQuery, useSuspenseQuery } from '..'
-import type { Scope } from 'effector'
+import type { Scope, StoreWritable } from 'effector'
+
+// `fork({ values })` expects `[StoreWritable<T>, T]` pairs. Our public
+// query result interfaces expose `$data` / `$status` / … as read-only
+// `Store<T>`, but at runtime they ARE writable (effector's `createStore`
+// always returns a writable store). The cast bridges the type-level
+// read-only stance to the runtime reality — only used in tests that
+// pre-populate scope state without going through a `mounted()` cycle.
+type StoreSeed = [StoreWritable<any>, any]
 
 function renderWithScope(scope: Scope, ui: React.ReactElement) {
   return render(<Provider value={scope}>{ui}</Provider>)
@@ -192,7 +200,7 @@ describe('useSuspenseQuery', () => {
       values: [
         [query.$error, failure],
         [query.$status, 'error'],
-      ],
+      ] as StoreSeed[],
     })
 
     function Page() {
@@ -231,7 +239,7 @@ describe('useSuspenseQuery', () => {
       values: [
         [query.$data, { name: 'from-store' }],
         [query.$status, 'success'],
-      ],
+      ] as StoreSeed[],
     })
 
     function Page() {
@@ -382,7 +390,7 @@ describe('useSuspenseInfiniteQuery', () => {
       values: [
         [query.$error, failure],
         [query.$status, 'error'],
-      ],
+      ] as StoreSeed[],
     })
 
     function Page() {
@@ -454,7 +462,7 @@ describe('useSuspenseInfiniteQuery', () => {
         [query.$data, { pages: [1, 2], pageParams: [0, 1] }],
         [query.$status, 'success'],
         [query.$hasNextPage, true],
-      ],
+      ] as StoreSeed[],
     })
 
     function Page() {
