@@ -16,6 +16,7 @@ export function Nav() {
     <nav className="nav">
       <div className="row">
         <Link href="/">Home</Link>
+        <Link href="/suspense">Suspense</Link>
         <Link href="/migration">Migration</Link>
         <Link href="/pokemon/pikachu">pikachu</Link>
         <Link href="/pokemon/bulbasaur">bulbasaur</Link>
