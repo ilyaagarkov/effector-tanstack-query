@@ -43,6 +43,17 @@ The hook reads the per-scope `$observer` via `useUnit`. On the very first render
 
 When status is `'pending'`, the hook throws `observer.fetchOptimistic(...)`. This promise resolves with the queryFn result and is **deduplicated by `queryHash`** — multiple suspending consumers of the same key share the inflight request.
 
+## SSR store fallback
+
+In the Next.js App Router (and any other RSC-style runtime), the rendering scope produced by `<EffectorNext values={serialize(scope)}>` has neither `$queryClient` nor `$observer` — both stores are `serialize: 'ignore'` because class instances aren't JSON-shippable across the RSC boundary. To keep `useSuspenseQuery` working on the server pass, the hook reads `$status` / `$data` / `$error` directly from the rehydrated effector stores when no observer can be built:
+
+- `prefetchQueries` ran on the original (per-request) scope and populated those stores.
+- `serialize(scope)` carries the populated stores across the RSC boundary.
+- The hook reads `$status === 'success'` and returns `$data` synchronously — server-rendered HTML carries the data, no Suspense fallback shown.
+- On client hydration the same path runs against the populated browser stores. After mount, the observer is materialised against the singleton browser `QueryClient` and takes over for subsequent refetches / cache-miss suspensions.
+
+The error message *"useSuspenseQuery: no QueryClient is set"* only fires now when **both** the observer cannot be built **and** the store status is `'pending'` — i.e. the consumer landed in a scope with no `QueryClient` **and** no prefetch.
+
 ## Cache hits don't suspend
 
 If the cache already has data and `staleTime` keeps it fresh, the hook returns immediately:
