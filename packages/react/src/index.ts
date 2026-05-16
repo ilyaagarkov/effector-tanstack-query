@@ -239,11 +239,14 @@ export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
 // The mount/unmount effect is still wired up so that other consumers reading
 // the same query through `useUnit` / `useQuery` see updates in scope state.
 
-function useObserverRerender(observer: {
-  subscribe: (cb: () => void) => () => void
-}): void {
+function useObserverRerender(
+  observer: { subscribe: (cb: () => void) => () => void } | null,
+): void {
   const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
-  React.useEffect(() => observer.subscribe(forceRender), [observer])
+  React.useEffect(() => {
+    if (!observer) return
+    return observer.subscribe(forceRender)
+  }, [observer])
 }
 
 interface SuspenseFactory<TObserver> {
@@ -295,30 +298,71 @@ export function useSuspenseQuery<TData, TError = Error>(
   }, [mount, unmount])
 
   const observer = useSuspenseObserver(query)
-
   useObserverRerender(observer)
 
-  const result = observer.getOptimisticResult(observer.options as any)
+  // Store snapshot — always read so hook order is fixed across renders.
+  // The observer path doesn't use it; the store-only path (server-RSC of
+  // a scope rehydrated from `serialize`, where `$observer` and
+  // `$queryClient` are both `null` because they're `serialize: 'ignore'`)
+  // reads everything from here.
+  const state = useUnit({
+    data: query.$data,
+    error: query.$error,
+    status: query.$status,
+    isFetching: query.$isFetching,
+    isPlaceholderData: query.$isPlaceholderData,
+    fetchStatus: query.$fetchStatus,
+  })
 
-  if (result.status === 'error') throw result.error
-  if (result.status === 'pending') {
-    throw observer.fetchOptimistic(observer.options as any)
+  // Observer path: `getOptimisticResult` reads from `QueryCache`
+  // synchronously and reflects fetches/refetches the moment the observer
+  // notifies. Used whenever we have an in-scope observer
+  // (post-`mounted()`) or a transient one built from `$queryClient`.
+  if (observer) {
+    const result = observer.getOptimisticResult(observer.options as any)
+
+    if (result.status === 'error') throw result.error
+    if (result.status === 'pending') {
+      throw observer.fetchOptimistic(observer.options as any)
+    }
+
+    return {
+      data: result.data as TData,
+      error: result.error as TError | null,
+      status: 'success',
+      isPending: false,
+      isSuccess: true,
+      isError: false,
+      isFetching: result.isFetching,
+      isPlaceholderData: result.isPlaceholderData,
+      fetchStatus: result.fetchStatus,
+      refresh,
+    }
   }
 
-  // Read all secondary fields from the observer result, not the effector
-  // stores: stores are only populated after mountFx fires from useEffect,
-  // which on the very first successful render hasn't run yet. The observer
-  // result is always live and consistent.
+  // Store-only path: no observer materialisable. Trust `$status` —
+  // populated by `prefetchQueries` before the scope was serialised. A
+  // pending status here means there's no `QueryClient` and no prefetch
+  // happened: can't deduplicate-throw a fetch promise, so surface the
+  // misconfiguration as an error to `<ErrorBoundary>`.
+  if (state.status === 'error') throw state.error
+  if (state.status === 'pending') {
+    throw new Error(
+      '[@effector-tanstack-query/react] useSuspenseQuery: no QueryClient is set. ' +
+        'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
+    )
+  }
+
   return {
-    data: result.data as TData,
-    error: result.error as TError | null,
+    data: state.data as TData,
+    error: state.error as TError | null,
     status: 'success',
     isPending: false,
     isSuccess: true,
     isError: false,
-    isFetching: result.isFetching,
-    isPlaceholderData: result.isPlaceholderData,
-    fetchStatus: result.fetchStatus,
+    isFetching: state.isFetching,
+    isPlaceholderData: state.isPlaceholderData,
+    fetchStatus: state.fetchStatus,
     refresh,
   }
 }
@@ -366,47 +410,96 @@ export function useSuspenseInfiniteQuery<
   }, [mount, unmount])
 
   const observer = useSuspenseObserver(query)
-
   useObserverRerender(observer)
 
-  const result = observer.getOptimisticResult(observer.options as any)
+  // See `useSuspenseQuery` for the observer-vs-stores dual path rationale.
+  // Infinite queries carry pagination fields in separate effector stores
+  // (`$hasNextPage`, `$isFetchingNextPage`, …), so the store snapshot has
+  // to read those too.
+  const state = useUnit({
+    data: query.$data,
+    error: query.$error,
+    status: query.$status,
+    isFetching: query.$isFetching,
+    isPlaceholderData: query.$isPlaceholderData,
+    fetchStatus: query.$fetchStatus,
+    hasNextPage: query.$hasNextPage,
+    hasPreviousPage: query.$hasPreviousPage,
+    isFetchingNextPage: query.$isFetchingNextPage,
+    isFetchingPreviousPage: query.$isFetchingPreviousPage,
+    isFetchNextPageError: query.$isFetchNextPageError,
+    isFetchPreviousPageError: query.$isFetchPreviousPageError,
+  })
 
-  if (result.status === 'error') throw result.error
-  if (result.status === 'pending') {
-    throw (
-      observer as unknown as {
-        fetchOptimistic: (
-          options: typeof observer.options,
-        ) => Promise<unknown>
-      }
-    ).fetchOptimistic(observer.options)
+  if (observer) {
+    const obs = observer
+    const result = obs.getOptimisticResult(obs.options as any)
+
+    if (result.status === 'error') throw result.error
+    if (result.status === 'pending') {
+      throw (
+        obs as unknown as {
+          fetchOptimistic: (options: typeof obs.options) => Promise<unknown>
+        }
+      ).fetchOptimistic(obs.options)
+    }
+
+    const r = result as typeof result & {
+      hasNextPage: boolean
+      hasPreviousPage: boolean
+      isFetchingNextPage: boolean
+      isFetchingPreviousPage: boolean
+      isFetchNextPageError: boolean
+      isFetchPreviousPageError: boolean
+    }
+
+    return {
+      data: r.data as TData,
+      error: r.error as TError | null,
+      status: 'success',
+      isPending: false,
+      isSuccess: true,
+      isError: false,
+      isFetching: r.isFetching,
+      isPlaceholderData: r.isPlaceholderData,
+      fetchStatus: r.fetchStatus,
+      hasNextPage: r.hasNextPage,
+      hasPreviousPage: r.hasPreviousPage,
+      isFetchingNextPage: r.isFetchingNextPage,
+      isFetchingPreviousPage: r.isFetchingPreviousPage,
+      isFetchNextPageError: r.isFetchNextPageError,
+      isFetchPreviousPageError: r.isFetchPreviousPageError,
+      refresh,
+      fetchNextPage,
+      fetchPreviousPage,
+    }
   }
 
-  const r = result as typeof result & {
-    hasNextPage: boolean
-    hasPreviousPage: boolean
-    isFetchingNextPage: boolean
-    isFetchingPreviousPage: boolean
-    isFetchNextPageError: boolean
-    isFetchPreviousPageError: boolean
+  // Store-only path (server-RSC of a hydrated scope).
+  if (state.status === 'error') throw state.error
+  if (state.status === 'pending') {
+    throw new Error(
+      '[@effector-tanstack-query/react] useSuspenseInfiniteQuery: no QueryClient is set. ' +
+        'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
+    )
   }
 
   return {
-    data: r.data as TData,
-    error: r.error as TError | null,
+    data: state.data as TData,
+    error: state.error as TError | null,
     status: 'success',
     isPending: false,
     isSuccess: true,
     isError: false,
-    isFetching: r.isFetching,
-    isPlaceholderData: r.isPlaceholderData,
-    fetchStatus: r.fetchStatus,
-    hasNextPage: r.hasNextPage,
-    hasPreviousPage: r.hasPreviousPage,
-    isFetchingNextPage: r.isFetchingNextPage,
-    isFetchingPreviousPage: r.isFetchingPreviousPage,
-    isFetchNextPageError: r.isFetchNextPageError,
-    isFetchPreviousPageError: r.isFetchPreviousPageError,
+    isFetching: state.isFetching,
+    isPlaceholderData: state.isPlaceholderData,
+    fetchStatus: state.fetchStatus,
+    hasNextPage: state.hasNextPage,
+    hasPreviousPage: state.hasPreviousPage,
+    isFetchingNextPage: state.isFetchingNextPage,
+    isFetchingPreviousPage: state.isFetchingPreviousPage,
+    isFetchNextPageError: state.isFetchNextPageError,
+    isFetchPreviousPageError: state.isFetchPreviousPageError,
     refresh,
     fetchNextPage,
     fetchPreviousPage,
@@ -450,7 +543,7 @@ function useSuspenseObserver<
     }
     fetchOptimistic(options: any): Promise<unknown>
   },
->(query: TQuery): TObserver {
+>(query: TQuery): TObserver | null {
   const factory = query as unknown as TQuery & SuspenseFactory<TObserver>
   const observerInScope = useUnit(query.$observer) as TObserver | null
   const qc = useUnit(query.$queryClient)
@@ -474,12 +567,11 @@ function useSuspenseObserver<
     transient.setOptions({ ...transient.options, queryKey, enabled })
   }, [transient, queryKey, enabled])
 
-  const observer = observerInScope ?? transient
-  if (!observer) {
-    throw new Error(
-      '[@effector-tanstack-query/react] useSuspenseQuery: no QueryClient is set. ' +
-        'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
-    )
-  }
-  return observer
+  // Null is a legitimate return: server-RSC render of a scope built from
+  // `serialize(scope)` has neither `$observer` nor `$queryClient` (both are
+  // `serialize: 'ignore'` — instances can't ride through the RSC boundary).
+  // Callers branch on `$status === 'success'` from the serialized stores;
+  // they only error out when a pending state is unreachable without an
+  // observer to throw `fetchOptimistic` on.
+  return observerInScope ?? transient
 }

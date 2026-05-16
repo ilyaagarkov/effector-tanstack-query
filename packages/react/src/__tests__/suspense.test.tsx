@@ -180,6 +180,75 @@ describe('useSuspenseQuery', () => {
     rendered.getByText('data: id-2')
   })
 
+  it('throws error from stores to ErrorBoundary when status is error and no observer in scope', async () => {
+    const query = createQuery<{ name: string }>({
+      name: 'suspense.serverStoreError',
+      queryKey: queryKey(),
+      queryFn: () => Promise.resolve({ name: 'unused' }),
+    })
+
+    const failure = new Error('from-store-error')
+    const scope = fork({
+      values: [
+        [query.$error, failure],
+        [query.$status, 'error'],
+      ],
+    })
+
+    function Page() {
+      const { data } = useSuspenseQuery(query)
+      return <span>{data.name}</span>
+    }
+
+    const rendered = renderWithScope(
+      scope,
+      <ErrorBoundary fallback={(e) => <span>boundary: {e.message}</span>}>
+        <React.Suspense fallback={<span>loading</span>}>
+          <Page />
+        </React.Suspense>
+      </ErrorBoundary>,
+    )
+
+    rendered.getByText('boundary: from-store-error')
+  })
+
+  it('serves data from effector stores when no QueryClient and no observer are in scope', async () => {
+    // Server-RSC scenario: `<EffectorNext values={serialize(scope)}>`
+    // rebuilds the rendering scope from a snapshot that excludes
+    // `$queryClient` and `$observer` (both `serialize: 'ignore'`). The
+    // query result stores (`$data`, `$status`, …) ARE in the snapshot,
+    // populated by a server-side `prefetchQueries(...)`. The hook has
+    // to read those directly — no observer, no QC.
+    const query = createQuery<{ name: string }>({
+      name: 'suspense.serverStore',
+      queryKey: queryKey(),
+      queryFn: () => Promise.resolve({ name: 'should not run' }),
+    })
+
+    // Simulate the post-`serialize(scope)` rendering scope: data + status
+    // are populated, $queryClient is not.
+    const scope = fork({
+      values: [
+        [query.$data, { name: 'from-store' }],
+        [query.$status, 'success'],
+      ],
+    })
+
+    function Page() {
+      const { data } = useSuspenseQuery(query)
+      return <span>{data.name}</span>
+    }
+
+    const rendered = renderWithScope(
+      scope,
+      <React.Suspense fallback={<span>loading</span>}>
+        <Page />
+      </React.Suspense>,
+    )
+
+    rendered.getByText('from-store')
+  })
+
   it('throws a helpful error if no QueryClient is set anywhere', async () => {
     // Factory created without an explicit QC — falls back to the global
     // `$queryClient`, which is null in a fresh scope. Both `observerInScope`
@@ -297,5 +366,113 @@ describe('useSuspenseInfiniteQuery', () => {
       await vi.advanceTimersByTimeAsync(6)
     })
     rendered.getByText('boundary: infinite fail')
+  })
+
+  it('throws error from stores when infinite status is error and no observer in scope', async () => {
+    const query = createInfiniteQuery<number, Error, number>({
+      name: 'suspense.infiniteServerStoreError',
+      queryKey: ['infinite-store-error'],
+      queryFn: () => Promise.resolve(0),
+      getNextPageParam: (last) => last + 1,
+      initialPageParam: 0,
+    })
+
+    const failure = new Error('infinite-store-error')
+    const scope = fork({
+      values: [
+        [query.$error, failure],
+        [query.$status, 'error'],
+      ],
+    })
+
+    function Page() {
+      const { data } = useSuspenseInfiniteQuery(query)
+      return <span>pages: {data.pages.length}</span>
+    }
+
+    const rendered = renderWithScope(
+      scope,
+      <ErrorBoundary fallback={(e) => <span>boundary: {e.message}</span>}>
+        <React.Suspense fallback={<span>loading</span>}>
+          <Page />
+        </React.Suspense>
+      </ErrorBoundary>,
+    )
+
+    rendered.getByText('boundary: infinite-store-error')
+  })
+
+  it('throws "no QueryClient" when infinite status is pending and no observer in scope', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {})
+
+    const query = createInfiniteQuery<number, Error, number>({
+      name: 'suspense.infiniteNoClient',
+      queryKey: ['infinite-no-client'],
+      queryFn: () => Promise.resolve(0),
+      getNextPageParam: (last) => last + 1,
+      initialPageParam: 0,
+    })
+
+    // Default $status is 'pending'; no $queryClient injection.
+    const scope = fork()
+
+    function Page() {
+      const { data } = useSuspenseInfiniteQuery(query)
+      return <span>pages: {data.pages.length}</span>
+    }
+
+    const rendered = renderWithScope(
+      scope,
+      <ErrorBoundary fallback={(e) => <span>boundary: {e.message}</span>}>
+        <React.Suspense fallback={<span>loading</span>}>
+          <Page />
+        </React.Suspense>
+      </ErrorBoundary>,
+    )
+
+    expect(rendered.container.textContent ?? '').toMatch(/no QueryClient is set/)
+
+    consoleError.mockRestore()
+  })
+
+  it('serves infinite data from effector stores when no QueryClient and no observer are in scope', async () => {
+    // Same SSR store fallback as `useSuspenseQuery`, but for infinite — the
+    // pagination fields (`$hasNextPage`, `$isFetchingNextPage`, …) also
+    // have to be read from stores when the observer can't be built.
+    const query = createInfiniteQuery<number, Error, number>({
+      name: 'suspense.infiniteServerStore',
+      queryKey: ['infinite-server'],
+      queryFn: () => Promise.resolve(0),
+      getNextPageParam: (last) => last + 1,
+      initialPageParam: 0,
+    })
+
+    const scope = fork({
+      values: [
+        [query.$data, { pages: [1, 2], pageParams: [0, 1] }],
+        [query.$status, 'success'],
+        [query.$hasNextPage, true],
+      ],
+    })
+
+    function Page() {
+      const { data, hasNextPage } = useSuspenseInfiniteQuery(query)
+      return (
+        <span>
+          pages: {data.pages.join(',')} | next: {String(hasNextPage)}
+        </span>
+      )
+    }
+
+    const rendered = renderWithScope(
+      scope,
+      <React.Suspense fallback={<span>loading</span>}>
+        <Page />
+      </React.Suspense>,
+    )
+
+    rendered.getByText('pages: 1,2 | next: true')
   })
 })
