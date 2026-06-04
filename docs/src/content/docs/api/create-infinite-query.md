@@ -60,6 +60,20 @@ In addition to the base `QueryResult` fields:
 | `fetchPreviousPage`         | `EventCallable<void>` | Trigger previous-page fetch  |
 | `prefetch`                  | `EventCallable<void>` | `queryClient.fetchInfiniteQuery` + awaits; for SSR — see [`createQuery#prefetch-vs-mounted`](/effector-tanstack-query/api/create-query/#prefetch-vs-mounted) |
 
+Plus `finished` — `{ success: Event<TData>; failure: Event<TError> }`, the
+lifecycle events shared with `createQuery` (see
+[Lifecycle events](/effector-tanstack-query/api/create-query/#lifecycle-events)).
+`finished.success` carries the full `TData` (the `InfiniteData` page set, or the
+`select` result) and fires on each completed fetch — including `fetchNextPage` /
+`fetchPreviousPage` resolutions, which advance the data timestamp.
+
+```ts
+sample({
+  clock: postsQuery.finished.success,
+  target: trackPagesLoaded,
+})
+```
+
 `$data` is `Store<TData | undefined>` where `TData` defaults to `InfiniteData<TQueryFnData, TPageParam>`. With `select`, it's whatever your selector returns.
 
 ## select

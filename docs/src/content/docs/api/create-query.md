@@ -58,6 +58,53 @@ type EffectorQueryKey = ReadonlyArray<
 | `prefetch`           | `EventCallable<void>`                         | `queryClient.fetchQuery` + **awaits**; for SSR / route loaders |
 | `$observer`          | `Store<QueryObserver<TData, TError> \| null>` | Per-scope observer (created on `mounted()`) |
 | `$queryClient`       | `Store<QueryClient \| null>`                  | Resolved client for this query           |
+| `finished`           | `{ success: Event<TData>; failure: Event<TError> }` | Lifecycle events for `sample`-driven reactions |
+
+## Lifecycle events
+
+`finished.success` and `finished.failure` let you react to **fetch completion**
+from module-level `sample` wiring — no polling on `$status`, no manual diffing.
+They mirror `createMutation`'s `finished`.
+
+| Event              | Fires when…                                                            | Payload  |
+| ------------------ | --------------------------------------------------------------------- | -------- |
+| `finished.success` | A fetch resolves successfully — fresh fetch, `refresh()`, reactive key change, or a cross-scope `setQueryData` | `TData` (post-`select`) |
+| `finished.failure` | A fetch fails                                                         | `TError` |
+
+```ts
+const userQuery = createQuery({
+  name: 'user',
+  queryKey: ['user', $userId],
+  queryFn: ({ queryKey }) => fetchUser(queryKey[1]),
+})
+
+// After every successful fetch, load dependent data.
+sample({
+  clock: userQuery.finished.success,
+  target: loadSettings,
+})
+
+// Toast on every failure.
+sample({
+  clock: userQuery.finished.failure,
+  fn: (err) => `Failed: ${err.message}`,
+  target: showToast,
+})
+```
+
+The payload is the data / error directly (not `{ params, result }` like a
+mutation) — a query has no per-call variations, and its key is resolved by the
+factory. If you need the resolved key alongside the data, add a second `sample`
+that reads `$status` or the internal `__resolvedKey` store.
+
+**Baseline — what does _not_ fire.** On the first observation in a scope (e.g.
+`mounted()` over SSR-hydrated cache data) neither event fires. The events track
+**new** fetches, not the initial observability of already-cached data —
+otherwise every page load would re-fire `success` for hydrated data. Each fork
+scope tracks its own baseline independently. Placeholder data
+(`$isPlaceholderData`) never fires `success` either; only a real resolution
+does. On the server, `prefetch` populates the cache without an observer
+subscription, so no lifecycle events fire there.
 
 ## `prefetch` vs `mounted`
 

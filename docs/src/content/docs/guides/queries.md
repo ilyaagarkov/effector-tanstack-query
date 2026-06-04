@@ -174,6 +174,38 @@ createQuery({
 userQuery.refresh() // invalidates the query and refetches in the background
 ```
 
+## Reacting to fetch completion
+
+`finished.success` / `finished.failure` are events you can drive `sample` from —
+react to every completed fetch without watching `$status` by hand.
+
+```ts
+const userQuery = createQuery({
+  name: 'user',
+  queryKey: ['user', $userId],
+  queryFn: ({ queryKey }) => fetchUser(queryKey[1]),
+})
+
+// Chain a dependent load off each successful fetch.
+sample({
+  clock: userQuery.finished.success,
+  target: loadSettings,
+})
+
+// Surface every failure.
+sample({
+  clock: userQuery.finished.failure,
+  fn: (err) => `Failed: ${err.message}`,
+  target: showToast,
+})
+```
+
+`finished.success` carries the post-`select` data; `finished.failure` carries the
+error. They fire on fresh fetches, `refresh()`, and reactive key changes — but
+**not** for the baseline state seen on mount (e.g. SSR-hydrated cache). See the
+[`createQuery` lifecycle events reference](/effector-tanstack-query/api/create-query/#lifecycle-events)
+for the full semantics.
+
 ## Lifecycle
 
 You must call `mounted()` (or use `useQuery(query)` in React) for the observer to subscribe. `unmounted()` tears it down.
