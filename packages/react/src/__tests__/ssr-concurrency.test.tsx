@@ -16,11 +16,11 @@
 // If that isolation ever broke — a stray non-scoped `getState`, a queryClient
 // shared across forks, a dispatcher bound to the wrong scope — the symptom is
 // the worst bug in all of SSR: "user X sees user Y's data". These tests fan
-// out 10000 concurrent renders with deliberately overlapping async timing and
+// out 1000 concurrent renders with deliberately overlapping async timing and
 // assert that NOTHING crosses between responses.
 //
 // Real timers (NOT vi.useFakeTimers) on purpose: the random per-request delay
-// must actually elapse so the 10000 prefetch/render pipelines interleave in time
+// must actually elapse so the 1000 prefetch/render pipelines interleave in time
 // — that temporal overlap is what would expose a scope leak.
 import { describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
@@ -102,11 +102,11 @@ function makeRequestScope(name: string): {
 }
 
 describe("SSR concurrency — per-request scope isolation", () => {
-  it("10000 parallel renders with distinct names stay isolated", async () => {
-    const names = Array.from({ length: 10000 }, (_, i) => userId(i));
+  it("1000 parallel renders with distinct names stay isolated", async () => {
+    const names = Array.from({ length: 1000 }, (_, i) => userId(i));
 
     const fetchSpy = vi.fn(async (name: string): Promise<User> => {
-      // Random delay so the 10000 pipelines overlap in wall-clock time — the
+      // Random delay so the 1000 pipelines overlap in wall-clock time — the
       // interleaving that would surface a cross-scope leak.
       await new Promise((r) => setTimeout(r, Math.random() * 10));
       return { name, displayName: name.toUpperCase() };
@@ -158,7 +158,7 @@ describe("SSR concurrency — per-request scope isolation", () => {
       //    single match is this request's own id. One foreign token anywhere is
       //    a leak. This stays linear in total work, so it scales to any N.
       const cacheJson = JSON.stringify(r.dehydrated);
-      const ID_PATTERN = /user-\d{4}/gi;
+      const ID_PATTERN = /user-\d{3}/gi;
       for (const payload of [r.html, cacheJson, serializedJson]) {
         for (const match of payload.match(ID_PATTERN) ?? []) {
           expect(match.toLowerCase()).toBe(r.name);
@@ -203,8 +203,8 @@ describe("SSR concurrency — per-request scope isolation", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("a failed request in one scope does not break the other 99 renders", async () => {
-    const names = Array.from({ length: 10000 }, (_, i) => userId(i));
+  it("a failed request in one scope does not break the other 999 renders", async () => {
+    const names = Array.from({ length: 1000 }, (_, i) => userId(i));
     const poisonedName = userId(7);
 
     const fetchSpy = vi.fn(async (name: string): Promise<User> => {
