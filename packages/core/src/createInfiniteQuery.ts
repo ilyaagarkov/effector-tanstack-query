@@ -272,6 +272,7 @@ export function createInfiniteQuery<
     prefetch,
     mounted: base.mounted,
     unmounted: base.unmounted,
+    finished: base.finished,
   }
 
   Object.defineProperty(result, '__createObserver', {

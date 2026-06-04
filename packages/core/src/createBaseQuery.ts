@@ -6,7 +6,7 @@ import {
   sample,
   scopeBind,
 } from 'effector'
-import type { EventCallable, Store } from 'effector'
+import type { Event, EventCallable, Store } from 'effector'
 import type {
   FetchStatus,
   QueryClient,
@@ -40,6 +40,17 @@ export interface BaseObserverResult<TData, TError> {
   isFetching: boolean
   fetchStatus: FetchStatus
   isPlaceholderData: boolean
+  /**
+   * Timestamp (ms) of the last successful data resolution. Monotonically
+   * increases per successful fetch — used to detect newly-finished fetches
+   * for the `finished.success` lifecycle event.
+   */
+  dataUpdatedAt: number
+  /**
+   * Timestamp (ms) of the last error. Increments per failed fetch — used to
+   * detect newly-finished failures for the `finished.failure` lifecycle event.
+   */
+  errorUpdatedAt: number
 }
 
 export interface BaseQueryStores<TData, TError, TObserver> {
@@ -71,6 +82,17 @@ export interface BaseQueryStores<TData, TError, TObserver> {
   refresh: EventCallable<void>
   mounted: EventCallable<void>
   unmounted: EventCallable<void>
+  /**
+   * Lifecycle events for `sample`-driven reactions to fetch completion.
+   * `success` fires with the (post-`select`) data on every newly-finished
+   * successful fetch; `failure` fires with the error on every failed fetch.
+   * Neither fires for the baseline state observed on mount (e.g. hydrated
+   * cache) — they track *new* fetches, not initial observability.
+   */
+  finished: {
+    success: Event<TData>
+    failure: Event<TError>
+  }
 }
 
 export interface BaseQueryOptions {
@@ -186,6 +208,11 @@ export function createBaseQuery<
   const fetchStatusUpdated = createEvent<FetchStatus>()
   const isPlaceholderDataUpdated = createEvent<boolean>()
 
+  // Lifecycle events. Created once at factory time; dispatched per-scope via
+  // scopeBind inside the mount effect so `allSettled` / fork isolation work.
+  const finishedSuccess = createEvent<TData>()
+  const finishedFailure = createEvent<TError>()
+
   const $data = createStore<TData | undefined>(undefined, {
     skipVoid: false,
     ...sidConfig(name, '$data'),
@@ -268,7 +295,18 @@ export function createBaseQuery<
       const dispatchIsPlaceholderData = scopeBind(isPlaceholderDataUpdated, {
         safe: true,
       })
+      const dispatchFinishedSuccess = scopeBind(finishedSuccess, { safe: true })
+      const dispatchFinishedFailure = scopeBind(finishedFailure, { safe: true })
       const dispatchExtras = extras?.bindDispatcher()
+
+      // Per-mount, per-scope baseline for lifecycle events. The first
+      // notification (the immediate getCurrentResult() emit below, or the
+      // observer's first callback) establishes the baseline without firing —
+      // so hydrated cache data on mount doesn't dispatch `finished.success`.
+      // Subsequent increments of dataUpdatedAt / errorUpdatedAt are genuine
+      // new fetches and do fire.
+      let lastDataUpdatedAt = -1
+      let lastErrorUpdatedAt = -1
 
       observerSubscriptions.get(observer)?.()
       observer.setOptions({
@@ -289,6 +327,30 @@ export function createBaseQuery<
         dispatchFetchStatus(result.fetchStatus)
         dispatchIsPlaceholderData(result.isPlaceholderData)
         dispatchExtras?.(result)
+
+        if (lastDataUpdatedAt === -1) {
+          // Baseline — record current timestamps without emitting.
+          lastDataUpdatedAt = result.dataUpdatedAt
+          lastErrorUpdatedAt = result.errorUpdatedAt
+        } else {
+          // A newly-resolved successful fetch. Guard against placeholderData,
+          // which carries status 'success' but never advances dataUpdatedAt.
+          if (
+            result.dataUpdatedAt > lastDataUpdatedAt &&
+            result.status === 'success' &&
+            !result.isPlaceholderData
+          ) {
+            lastDataUpdatedAt = result.dataUpdatedAt
+            dispatchFinishedSuccess(result.data as TData)
+          }
+          if (
+            result.errorUpdatedAt > lastErrorUpdatedAt &&
+            result.status === 'error'
+          ) {
+            lastErrorUpdatedAt = result.errorUpdatedAt
+            dispatchFinishedFailure(result.error as TError)
+          }
+        }
       }
 
       const unsubscribe = observer.subscribe(dispatch)
@@ -423,6 +485,10 @@ export function createBaseQuery<
     refresh,
     mounted,
     unmounted,
+    finished: {
+      success: finishedSuccess,
+      failure: finishedFailure,
+    },
     ...(extras?.stores ?? ({} as TExtraStores)),
   }
 }
