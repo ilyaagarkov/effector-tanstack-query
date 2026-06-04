@@ -7,6 +7,8 @@ import {
   type QueriesResult,
 } from '@effector-tanstack-query/core'
 import {
+  useIsFetching,
+  useIsMutating,
   useQueries,
   useSuspenseQueries,
   type UseQueryResult,
@@ -135,5 +137,16 @@ describe('useSuspenseQueries — family overload', () => {
     expectTypeOf<ReturnType<typeof probe>>().toEqualTypeOf<
       ReadonlyArray<UseSuspenseQueryResult<{ id: number }, Error>>
     >()
+  })
+})
+
+describe('useIsFetching / useIsMutating', () => {
+  it('return a plain number (never number | undefined)', () => {
+    expectTypeOf(useIsFetching()).toEqualTypeOf<number>()
+    expectTypeOf(useIsFetching({ queryKey: ['user'] })).toEqualTypeOf<number>()
+    expectTypeOf(useIsMutating()).toEqualTypeOf<number>()
+    expectTypeOf(
+      useIsMutating({ mutationKey: ['createUser'] }),
+    ).toEqualTypeOf<number>()
   })
 })
