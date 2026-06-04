@@ -1,8 +1,10 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import type { Store } from 'effector'
+import { createStore, type EventCallable, type Store } from 'effector'
 import type { InfiniteData, QueryClient } from '@tanstack/query-core'
 import { createQuery } from '../createQuery'
 import { createInfiniteQuery } from '../createInfiniteQuery'
+import { createQueries } from '../createQueries'
+import type { QueriesResult, QueryItemState } from '../types'
 
 // Type-level tests verify that generic inference flows correctly:
 //   - queryFn return → TQueryFnData
@@ -118,6 +120,46 @@ describe('createInfiniteQuery type narrowing', () => {
         expectTypeOf(data.pages).toEqualTypeOf<Array<{ id: number }>>()
         expectTypeOf(data.pageParams).toEqualTypeOf<Array<number>>()
         return data.pages.length
+      },
+    })
+  })
+})
+
+describe('createQueries type narrowing', () => {
+  it('infers TData from queryFn return; $items reflects the source/data shape', () => {
+    const $ids = createStore<number[]>([])
+    const family = createQueries({
+      name: 'users',
+      source: $ids,
+      query: (id) => ({
+        queryKey: ['user', id],
+        queryFn: () => Promise.resolve({ id, name: 'Alice' }),
+      }),
+    })
+
+    expectTypeOf(family).toEqualTypeOf<
+      QueriesResult<number, { id: number; name: string }, Error>
+    >()
+    expectTypeOf(family.$items).toEqualTypeOf<
+      Store<ReadonlyArray<QueryItemState<number, { id: number; name: string }, Error>>>
+    >()
+    expectTypeOf(family.$data).toEqualTypeOf<
+      Store<ReadonlyArray<{ id: number; name: string } | undefined>>
+    >()
+    expectTypeOf(family.refreshOne).toEqualTypeOf<EventCallable<number>>()
+  })
+
+  it('passes item type through to query(item) callback', () => {
+    const $users = createStore<Array<{ id: number; tag: string }>>([])
+    createQueries({
+      name: 'tagged',
+      source: $users,
+      query: (item) => {
+        expectTypeOf(item).toEqualTypeOf<{ id: number; tag: string }>()
+        return {
+          queryKey: ['tagged', item.id],
+          queryFn: () => Promise.resolve(item.tag.length),
+        }
       },
     })
   })

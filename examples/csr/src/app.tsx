@@ -6,6 +6,7 @@ import { PlaceholderPage } from './pages/placeholder'
 import { PollingPage } from './pages/polling'
 import { InfinitePage } from './pages/infinite'
 import { SuspensePage } from './pages/suspense'
+import { FamilyPage } from './pages/family'
 import { MutationPage } from './pages/mutation'
 import { OptimisticPage } from './pages/optimistic'
 import { MutateWithPage } from './pages/mutate-with'
@@ -18,6 +19,7 @@ const NAV: Array<{ to: string; label: string }> = [
   { to: '/polling', label: 'Polling' },
   { to: '/infinite', label: 'Infinite query' },
   { to: '/suspense', label: 'Suspense' },
+  { to: '/family', label: 'Query families (createQueries)' },
   { to: '/mutation', label: 'Mutation + invalidate' },
   { to: '/optimistic', label: 'Optimistic update' },
   { to: '/mutate-with', label: 'mutateWith (per-call cb)' },
@@ -50,6 +52,7 @@ export function App() {
           <Route path="/polling" element={<PollingPage />} />
           <Route path="/infinite" element={<InfinitePage />} />
           <Route path="/suspense" element={<SuspensePage />} />
+          <Route path="/family" element={<FamilyPage />} />
           <Route path="/mutation" element={<MutationPage />} />
           <Route path="/optimistic" element={<OptimisticPage />} />
           <Route path="/mutate-with" element={<MutateWithPage />} />

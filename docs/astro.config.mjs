@@ -75,6 +75,7 @@ export default defineConfig({
             { label: 'Queries', slug: 'guides/queries' },
             { label: 'Mutations', slug: 'guides/mutations' },
             { label: 'Infinite queries', slug: 'guides/infinite-queries' },
+            { label: 'Query families', slug: 'guides/queries-family' },
             {
               label: 'SSR',
               items: [
@@ -93,9 +94,11 @@ export default defineConfig({
           label: 'React',
           items: [
             { label: 'useQuery', slug: 'react/use-query' },
+            { label: 'useQueries', slug: 'react/use-queries' },
             { label: 'useMutation', slug: 'react/use-mutation' },
             { label: 'useInfiniteQuery', slug: 'react/use-infinite-query' },
             { label: 'useSuspenseQuery', slug: 'react/use-suspense-query' },
+            { label: 'useSuspenseQueries', slug: 'react/use-suspense-queries' },
             {
               label: 'useSuspenseInfiniteQuery',
               slug: 'react/use-suspense-infinite-query',
@@ -107,6 +110,7 @@ export default defineConfig({
           label: 'API reference',
           items: [
             { label: 'createQuery', slug: 'api/create-query' },
+            { label: 'createQueries', slug: 'api/create-queries' },
             { label: 'createMutation', slug: 'api/create-mutation' },
             { label: 'createInfiniteQuery', slug: 'api/create-infinite-query' },
             { label: 'createInvalidate', slug: 'api/create-invalidate' },
