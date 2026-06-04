@@ -14,6 +14,7 @@ export default defineConfig({
     'src/createMutation.ts',
     'src/createBaseQuery.ts',
     'src/createInvalidate.ts',
+    'src/createCacheAction.ts',
     'src/queryClient.ts',
     'src/prefetchQueries.ts',
     'src/resolve.ts',

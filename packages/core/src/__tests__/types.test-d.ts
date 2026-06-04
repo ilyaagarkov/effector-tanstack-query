@@ -9,6 +9,11 @@ import type { InfiniteData, QueryClient } from '@tanstack/query-core'
 import { createQuery } from '../createQuery'
 import { createInfiniteQuery } from '../createInfiniteQuery'
 import { createQueries } from '../createQueries'
+import {
+  createCancel,
+  createRemove,
+  createReset,
+} from '../createCacheAction'
 import type { QueriesResult, QueryItemState } from '../types'
 
 // Type-level tests verify that generic inference flows correctly:
@@ -212,5 +217,28 @@ describe('createQueries type narrowing', () => {
         }
       },
     })
+  })
+})
+
+describe('cache actions', () => {
+  const $userId = createStore(1)
+
+  it('return EventCallable<void> and accept a reactive queryKey', () => {
+    expectTypeOf(
+      createCancel({ queryKey: ['user', $userId] }),
+    ).toEqualTypeOf<EventCallable<void>>()
+    expectTypeOf(
+      createRemove({ queryKey: ['stale'] }),
+    ).toEqualTypeOf<EventCallable<void>>()
+    expectTypeOf(
+      createReset({ queryKey: ['search'] }),
+    ).toEqualTypeOf<EventCallable<void>>()
+  })
+
+  it('accept an omitted queryKey (target all) and the explicit-client overload', () => {
+    expectTypeOf(createCancel({})).toEqualTypeOf<EventCallable<void>>()
+    expectTypeOf(
+      createReset(queryClient, { queryKey: ['search'], type: 'active' }),
+    ).toEqualTypeOf<EventCallable<void>>()
   })
 })
