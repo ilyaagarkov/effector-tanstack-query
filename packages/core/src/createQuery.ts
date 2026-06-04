@@ -124,6 +124,7 @@ export function createQuery<
     prefetch,
     mounted: base.mounted,
     unmounted: base.unmounted,
+    finished: base.finished,
   }
 
   // Internal: used by useSuspenseQuery to construct a transient observer

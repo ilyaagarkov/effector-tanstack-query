@@ -1,5 +1,10 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import { createStore, type EventCallable, type Store } from 'effector'
+import {
+  createStore,
+  type Event,
+  type EventCallable,
+  type Store,
+} from 'effector'
 import type { InfiniteData, QueryClient } from '@tanstack/query-core'
 import { createQuery } from '../createQuery'
 import { createInfiniteQuery } from '../createInfiniteQuery'
@@ -76,6 +81,36 @@ describe('createQuery type narrowing', () => {
       Store<{ count: number } | undefined>
     >()
   })
+
+  it('should type finished.success / finished.failure with TData / TError', () => {
+    interface User {
+      id: number
+    }
+    class CustomError extends Error {
+      code = 1
+    }
+
+    const q = createQuery<User, CustomError>(queryClient, {
+      name: 'finished',
+      queryKey: ['user'],
+      queryFn: () => Promise.resolve({ id: 1 }),
+    })
+
+    expectTypeOf(q.finished.success).toEqualTypeOf<Event<User>>()
+    expectTypeOf(q.finished.failure).toEqualTypeOf<Event<CustomError>>()
+  })
+
+  it('should type finished.success as the post-select TData', () => {
+    const q = createQuery(queryClient, {
+      name: 'finished-select',
+      queryKey: ['user'],
+      queryFn: () => Promise.resolve({ name: 'Alice', age: 30 }),
+      select: (data) => data.name,
+    })
+
+    expectTypeOf(q.finished.success).toEqualTypeOf<Event<string>>()
+    expectTypeOf(q.finished.failure).toEqualTypeOf<Event<Error>>()
+  })
 })
 
 describe('createInfiniteQuery type narrowing', () => {
@@ -122,6 +157,21 @@ describe('createInfiniteQuery type narrowing', () => {
         return data.pages.length
       },
     })
+  })
+
+  it('should type finished.success with the (post-select) TData', () => {
+    const q = createInfiniteQuery(queryClient, {
+      name: 'infiniteFinished',
+      queryKey: ['posts'],
+      queryFn: ({ pageParam }: { pageParam: number }) =>
+        Promise.resolve({ id: pageParam, title: 'post' }),
+      getNextPageParam: (lastPage) => lastPage.id + 1,
+      initialPageParam: 0,
+      select: (data) => data.pages.map((p) => p.title),
+    })
+
+    expectTypeOf(q.finished.success).toEqualTypeOf<Event<Array<string>>>()
+    expectTypeOf(q.finished.failure).toEqualTypeOf<Event<Error>>()
   })
 })
 

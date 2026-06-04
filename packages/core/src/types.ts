@@ -160,6 +160,30 @@ export interface QueryResult<TData, TError = Error> {
    * `$queryClient` and honors `fork({ values: [[$queryClient, qc]] })`.
    */
   $queryClient: Store<QueryClient | null>
+  /**
+   * Lifecycle events for `sample`-driven reactions to fetch completion.
+   *
+   * - `success` fires with the (post-`select`) data on every newly-finished
+   *   successful fetch — fresh fetch, refetch, reactive key change, or a
+   *   cross-scope `setQueryData`.
+   * - `failure` fires with the error on every failed fetch.
+   *
+   * Neither fires for the baseline state observed on `mounted()` (e.g.
+   * SSR-hydrated cache data) — the events track *new* fetches, not the
+   * initial observation. Each fork scope tracks its own baseline.
+   *
+   * @example
+   * sample({ clock: userQuery.finished.success, target: loadSettings })
+   * sample({
+   *   clock: userQuery.finished.failure,
+   *   fn: (err) => `Failed: ${err.message}`,
+   *   target: showToast,
+   * })
+   */
+  finished: {
+    success: Event<TData>
+    failure: Event<TError>
+  }
 }
 
 export interface CreateInfiniteQueryOptions<
@@ -231,6 +255,11 @@ export interface InfiniteQueryResult<
   >
   /** See {@link QueryResult.$queryClient}. */
   $queryClient: Store<QueryClient | null>
+  /** See {@link QueryResult.finished}. */
+  finished: {
+    success: Event<TData>
+    failure: Event<TError>
+  }
 }
 
 export type CreateMutationOptions<
