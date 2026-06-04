@@ -4,6 +4,17 @@ export { createQueries } from './createQueries'
 export { createMutation } from './createMutation'
 export { createInvalidate } from './createInvalidate'
 export type { CreateInvalidateOptions } from './createInvalidate'
+export {
+  createCancel,
+  createRemove,
+  createReset,
+} from './createCacheAction'
+export type {
+  CacheActionOptions,
+  CreateCancelOptions,
+  CreateRemoveOptions,
+  CreateResetOptions,
+} from './createCacheAction'
 export { $queryClient, setQueryClient } from './queryClient'
 export { prefetchQueries } from './prefetchQueries'
 export type {
