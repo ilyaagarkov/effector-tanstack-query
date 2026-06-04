@@ -103,6 +103,8 @@ export default defineConfig({
               label: 'useSuspenseInfiniteQuery',
               slug: 'react/use-suspense-infinite-query',
             },
+            { label: 'useIsFetching', slug: 'react/use-is-fetching' },
+            { label: 'useIsMutating', slug: 'react/use-is-mutating' },
             { label: 'HydrationBoundary', slug: 'react/hydration-boundary' },
           ],
         },
