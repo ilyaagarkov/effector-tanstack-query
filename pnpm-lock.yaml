@@ -169,12 +169,13 @@ importers:
 
   packages/core:
     dependencies:
-      '@tanstack/query-core':
-        specifier: ^5.100.10
-        version: 5.100.10
       effector:
         specifier: '>=23.0.0'
         version: 23.4.4
+    devDependencies:
+      '@tanstack/query-core':
+        specifier: ^5.100.10
+        version: 5.100.10
 
   packages/react:
     dependencies:
