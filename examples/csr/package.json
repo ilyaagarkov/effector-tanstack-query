@@ -12,8 +12,8 @@
     "prebuild": "msw init public/ --no-save 2>/dev/null || true"
   },
   "dependencies": {
-    "@effector-tanstack-query/core": "^0.5.0",
-    "@effector-tanstack-query/react": "^0.5.0",
+    "@effector-tanstack-query/core": "^1.0.0-rc.1",
+    "@effector-tanstack-query/react": "^1.0.0-rc.1",
     "@tanstack/query-core": "^5.100.10",
     "@tanstack/react-query-devtools": "^5.0.0",
     "effector": "^23.4.4",

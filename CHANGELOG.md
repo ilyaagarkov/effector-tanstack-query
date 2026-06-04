@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share this changelog. Per-release version numbers below indicate which package shipped which change; entries for a single package mention the other staying at its previous version.
 
+## [1.0.0-rc.1] — 2026-06-04
+
+First release candidate for the upcoming stable 1.0. No API changes vs `0.5.0` — this RC freezes the public surface and asks for real-world validation before the stable cut.
+
+### Released alongside
+
+A wave of internal hardening landed between 0.5.0 and this RC, with no behaviour change for consumers:
+
+- **CI hygiene** — `attw` and `publint` now run on every PR and before each release; broken `exports` fields and ESM/CJS type masquerading can no longer ship.
+- **SSR concurrency stress test** — 1000 parallel `renderToString` calls with overlapping async timing assert per-request scope isolation. Catches the worst class of SSR bug (cross-request data leak) automatically on every push.
+- **Compat matrix** — scheduled workflow runs the full test suite + both example builds against React 18 / 19 with Next.js 15 / 16. PRs touching CI / examples / packages get the same matrix.
+- **AbortSignal pass-through** — verified with a dedicated test that the standard TanStack `queryFn({ signal })` is wired through `createQuery` / `createInfiniteQuery`. Documented under each factory's "Cancellation" section.
+- **Node** — CI bumped to Node 22 / 24 (Node 20 LTS ended in April).
+- **CHANGELOG.md** — this file added, covering every release from 0.1.0.
+
+### Install
+
+```bash
+npm install @effector-tanstack-query/core@rc @effector-tanstack-query/react@rc
+```
+
+The `rc` dist-tag means existing `npm install pkg` users on the `latest` channel keep getting `0.5.0` and are not affected. RC users opt in explicitly.
+
+### Plan to 1.0
+
+- ≥ 14 days under the `rc` tag
+- ≥ 3 public dependents / feedback items
+- No reported issue requires a breaking change
+
+Reach the bar → publish `1.0.0` to `latest`. Find one that requires a breaking change → fix → `1.0.0-rc.2` and restart the clock.
+
 ## [0.5.0] — 2026-06-04
 
 ### Added
@@ -99,6 +130,7 @@ Initial public release.
 - `@effector-tanstack-query/react`: `useQuery`, `useInfiniteQuery`, `useMutation`, `useSuspenseQuery`, `useSuspenseInfiniteQuery`.
 - Per-package READMEs for npm pages, project docs site, working CSR and SSR examples.
 
+[1.0.0-rc.1]: https://github.com/ilyaagarkov/effector-tanstack-query/releases/tag/v1.0.0-rc.1
 [0.5.0]: https://github.com/ilyaagarkov/effector-tanstack-query/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ilyaagarkov/effector-tanstack-query/releases/tag/v0.4.0
 [0.3.1]: https://github.com/ilyaagarkov/effector-tanstack-query/releases/tag/v0.3.1
