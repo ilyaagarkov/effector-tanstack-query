@@ -15,6 +15,7 @@ import type {
   InfiniteQueryResult,
   MutationResult,
   MutationStatus,
+  QueriesResult,
   QueryResult,
 } from '@effector-tanstack-query/core'
 
@@ -224,6 +225,119 @@ export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   }, [mount, unmount])
 
   return { ...state, refresh, fetchNextPage, fetchPreviousPage }
+}
+
+// =============================================================================
+// useQueries — parallel reads across a static tuple of factories OR a family
+// produced by `createQueries({ source, query })`.
+// =============================================================================
+
+type UseQueriesTuple = ReadonlyArray<QueryResult<any, any>>
+
+/**
+ * Maps a tuple of `QueryResult<TData, TError>` to a tuple of
+ * `UseQueryResult<TData, TError>`, preserving per-element types so
+ * destructuring (`const [user, posts] = useQueries([...] as const)`)
+ * yields fully-typed entries.
+ */
+export type UseQueriesTupleResult<T extends UseQueriesTuple> = {
+  [K in keyof T]: T[K] extends QueryResult<infer D, infer E>
+    ? UseQueryResult<D, E>
+    : never
+}
+
+export function useQueries<const T extends UseQueriesTuple>(
+  queries: T,
+): UseQueriesTupleResult<T>
+export function useQueries<TItem, TData, TError>(
+  family: QueriesResult<TItem, TData, TError>,
+): ReadonlyArray<UseQueryResult<TData, TError>>
+export function useQueries(
+  arg: UseQueriesTuple | QueriesResult<unknown, unknown, unknown>,
+): UseQueriesTupleResult<UseQueriesTuple> | ReadonlyArray<UseQueryResult<unknown, unknown>> {
+  if (Array.isArray(arg)) {
+    return useQueriesTuple(arg)
+  }
+  return useQueriesFamily(arg as QueriesResult<unknown, unknown, unknown>)
+}
+
+function useQueriesTuple<T extends UseQueriesTuple>(
+  queries: T,
+): UseQueriesTupleResult<T> {
+  // Twelve `useUnit` calls — count is FIXED, independent of N. The
+  // array argument may grow / shrink between renders; effector-react
+  // re-subscribes the underlying stores transparently.
+  //
+  // Rules-of-hooks constraint: the SHAPE of the call list must be
+  // stable, not the length of each input array. We satisfy this with a
+  // fixed sequence of 9 state-store calls + 3 event-bind calls.
+  const datas              = useUnit(queries.map((q) => q.$data))
+  const errors             = useUnit(queries.map((q) => q.$error))
+  const statuses           = useUnit(queries.map((q) => q.$status))
+  const isPendings         = useUnit(queries.map((q) => q.$isPending))
+  const isFetchings        = useUnit(queries.map((q) => q.$isFetching))
+  const isSuccesses        = useUnit(queries.map((q) => q.$isSuccess))
+  const isErrors           = useUnit(queries.map((q) => q.$isError))
+  const isPlaceholderDatas = useUnit(queries.map((q) => q.$isPlaceholderData))
+  const fetchStatuses      = useUnit(queries.map((q) => q.$fetchStatus))
+
+  const mounts    = useUnit(queries.map((q) => q.mounted))
+  const unmounts  = useUnit(queries.map((q) => q.unmounted))
+  const refreshes = useUnit(queries.map((q) => q.refresh))
+
+  React.useEffect(() => {
+    for (const m of mounts) m()
+    return () => {
+      for (const u of unmounts) u()
+    }
+    // The dep on length re-runs mount/unmount when the consumer swaps
+    // out the factory set (rare; most consumers pass a stable `as const`
+    // literal). Function refs from `useUnit` are stable per (unit, scope)
+    // — depending on their array identity would re-fire every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queries.length])
+
+  return queries.map((_, i) => ({
+    data:              datas[i],
+    error:             errors[i],
+    status:            statuses[i],
+    isPending:         isPendings[i],
+    isFetching:        isFetchings[i],
+    isSuccess:         isSuccesses[i],
+    isError:           isErrors[i],
+    isPlaceholderData: isPlaceholderDatas[i],
+    fetchStatus:       fetchStatuses[i],
+    refresh:           refreshes[i],
+  })) as UseQueriesTupleResult<T>
+}
+
+function useQueriesFamily<TItem, TData, TError>(
+  family: QueriesResult<TItem, TData, TError>,
+): ReadonlyArray<UseQueryResult<TData, TError>> {
+  const items = useUnit(family.$items)
+  const mount = useUnit(family.mounted)
+  const unmount = useUnit(family.unmounted)
+  const refreshOne = useUnit(family.refreshOne)
+
+  React.useEffect(() => {
+    mount()
+    return () => unmount()
+  }, [mount, unmount])
+
+  return items.map((it) => ({
+    data:              it.data,
+    error:             it.error,
+    status:            it.status,
+    isPending:         it.isPending,
+    isFetching:        it.isFetching,
+    isSuccess:         it.isSuccess,
+    isError:           it.isError,
+    isPlaceholderData: it.isPlaceholderData,
+    fetchStatus:       it.fetchStatus,
+    // Per-item refresh — routes through the family's `refreshOne(item)`
+    // so the consumer doesn't have to thread the source manually.
+    refresh:           () => refreshOne(it.source),
+  }))
 }
 
 // Suspense data path: read from a per-scope observer.
@@ -574,4 +688,236 @@ function useSuspenseObserver<
   // they only error out when a pending state is unreachable without an
   // observer to throw `fetchOptimistic` on.
   return observerInScope ?? transient
+}
+
+// =============================================================================
+// useSuspenseQueries — Suspense variant of `useQueries`. Same two overloads:
+// static tuple of factories OR a family from `createQueries(...)`.
+// =============================================================================
+
+type UseSuspenseQueriesTuple = ReadonlyArray<QueryResult<any, any>>
+
+export type UseSuspenseQueriesTupleResult<T extends UseSuspenseQueriesTuple> = {
+  [K in keyof T]: T[K] extends QueryResult<infer D, infer E>
+    ? UseSuspenseQueryResult<D, E>
+    : never
+}
+
+export function useSuspenseQueries<const T extends UseSuspenseQueriesTuple>(
+  queries: T,
+): UseSuspenseQueriesTupleResult<T>
+export function useSuspenseQueries<TItem, TData, TError>(
+  family: QueriesResult<TItem, TData, TError>,
+): ReadonlyArray<UseSuspenseQueryResult<TData, TError>>
+export function useSuspenseQueries(
+  arg: UseSuspenseQueriesTuple | QueriesResult<unknown, unknown, unknown>,
+):
+  | UseSuspenseQueriesTupleResult<UseSuspenseQueriesTuple>
+  | ReadonlyArray<UseSuspenseQueryResult<unknown, unknown>> {
+  if (Array.isArray(arg)) {
+    return useSuspenseQueriesTuple(arg)
+  }
+  return useSuspenseQueriesFamily(
+    arg as QueriesResult<unknown, unknown, unknown>,
+  )
+}
+
+function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
+  queries: T,
+): UseSuspenseQueriesTupleResult<T> {
+  // Mount lifecycle (same as `useQueriesTuple`).
+  const mounts = useUnit(queries.map((q) => q.mounted))
+  const unmounts = useUnit(queries.map((q) => q.unmounted))
+  const refreshes = useUnit(queries.map((q) => q.refresh))
+  React.useEffect(() => {
+    for (const m of mounts) m()
+    return () => {
+      for (const u of unmounts) u()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queries.length])
+
+  // Per-query state from stores — fixed hook count.
+  const datas = useUnit(queries.map((q) => q.$data))
+  const errors = useUnit(queries.map((q) => q.$error))
+  const statuses = useUnit(queries.map((q) => q.$status))
+  const isFetchings = useUnit(queries.map((q) => q.$isFetching))
+  const isPlaceholderDatas = useUnit(queries.map((q) => q.$isPlaceholderData))
+  const fetchStatuses = useUnit(queries.map((q) => q.$fetchStatus))
+
+  // Observer / qc / key info per query — same fixed-count pattern.
+  const observersInScope = useUnit(queries.map((q) => q.$observer))
+  const qcs = useUnit(queries.map((q) => q.$queryClient))
+  const resolvedKeys = useUnit(
+    queries.map((q) => (q as unknown as SuspenseFactory<unknown>).__resolvedKey),
+  )
+  const enabledStates = useUnit(
+    queries.map((q) => (q as unknown as SuspenseFactory<unknown>).__enabled),
+  )
+
+  // Transient observers per slot (null when an in-scope observer
+  // exists or no qc is available). One useMemo across all queries —
+  // hook-count stable.
+  const transients = React.useMemo(() => {
+    return queries.map((q, i) => {
+      if (observersInScope[i]) return null
+      const qc = qcs[i]
+      if (!qc) return null
+      return (q as unknown as SuspenseFactory<any>).__createObserver(qc, {
+        queryKey: resolvedKeys[i],
+        enabled: enabledStates[i] as boolean,
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queries, ...observersInScope, ...qcs, ...resolvedKeys, ...enabledStates])
+
+  type SuspendableObserver = {
+    options: { queryKey: unknown }
+    subscribe(cb: () => void): () => void
+    fetchOptimistic(options: any): Promise<unknown>
+    getOptimisticResult(options: any): {
+      status: 'pending' | 'success' | 'error'
+      data: unknown
+      error: unknown
+      isFetching: boolean
+      isPlaceholderData: boolean
+      fetchStatus: FetchStatus
+    }
+  }
+  const observers = queries.map(
+    (_, i) =>
+      ((observersInScope[i] ?? transients[i]) ?? null) as
+        | SuspendableObserver
+        | null,
+  )
+
+  // Subscribe to every live observer in one effect so the consumer
+  // re-renders when ANY of them notifies.
+  const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
+  React.useEffect(() => {
+    const unsubs = observers.map((obs) =>
+      obs ? obs.subscribe(forceRender) : null,
+    )
+    return () => {
+      for (const u of unsubs) u?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queries.length, ...observers])
+
+  // Per-slot live result — from observer if available (synchronous
+  // QueryCache read), otherwise null and we fall back to the
+  // effector-store snapshot. Mirrors the dual path in
+  // `useSuspenseQuery` so SSR scopes (`$observer` + `$queryClient`
+  // both null) keep working.
+  const liveResults = observers.map((obs) =>
+    obs ? obs.getOptimisticResult(obs.options) : null,
+  )
+
+  // Errors first — first error wins.
+  for (let i = 0; i < queries.length; i++) {
+    const live = liveResults[i]
+    if (live) {
+      if (live.status === 'error') throw live.error
+    } else if (statuses[i] === 'error') {
+      throw errors[i]
+    }
+  }
+
+  // Then pending — collect every pending query's inflight promise into
+  // a single `Promise.all` thrown to Suspense. The store-only path has
+  // no observer to fetch with: that's a misconfiguration (no QC, no
+  // prefetch), throw a clear error.
+  const pendingPromises: Array<Promise<unknown>> = []
+  for (let i = 0; i < queries.length; i++) {
+    const live = liveResults[i]
+    const obs = observers[i]
+    if (live) {
+      if (live.status === 'pending' && obs) {
+        pendingPromises.push(obs.fetchOptimistic(obs.options))
+      }
+    } else if (statuses[i] === 'pending') {
+      throw new Error(
+        '[@effector-tanstack-query/react] useSuspenseQueries: no QueryClient is set. ' +
+          'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
+      )
+    }
+  }
+  if (pendingPromises.length > 0) throw Promise.all(pendingPromises)
+
+  // All success — shape the result tuple. Prefer the observer's live
+  // result when present (reflects in-flight refetches), fall back to
+  // the store snapshot otherwise.
+  return queries.map((_, i) => {
+    const live = liveResults[i]
+    return {
+      data: (live ? live.data : datas[i]) as unknown,
+      error: (live ? live.error : (errors[i] ?? null)) as unknown,
+      status: 'success' as const,
+      isPending: false as const,
+      isSuccess: true as const,
+      isError: false as const,
+      isFetching: (live ? live.isFetching : isFetchings[i]) as boolean,
+      isPlaceholderData: (live
+        ? live.isPlaceholderData
+        : isPlaceholderDatas[i]) as boolean,
+      fetchStatus: (live ? live.fetchStatus : fetchStatuses[i]) as FetchStatus,
+      refresh: refreshes[i] as () => void,
+    }
+  }) as UseSuspenseQueriesTupleResult<T>
+}
+
+interface FamilyInternals<TItem> {
+  __queryFor: (item: TItem) => {
+    queryKey: ReadonlyArray<unknown>
+    queryFn?: unknown
+  }
+}
+
+function useSuspenseQueriesFamily<TItem, TData, TError>(
+  family: QueriesResult<TItem, TData, TError>,
+): ReadonlyArray<UseSuspenseQueryResult<TData, TError>> {
+  const mount = useUnit(family.mounted)
+  const unmount = useUnit(family.unmounted)
+  const refreshOne = useUnit(family.refreshOne)
+  React.useEffect(() => {
+    mount()
+    return () => unmount()
+  }, [mount, unmount])
+
+  const items = useUnit(family.$items)
+  const qc = useUnit(family.$queryClient)
+
+  // Error wins over pending.
+  for (const it of items) {
+    if (it.status === 'error') throw it.error
+  }
+
+  const pending = items.filter((it) => it.status === 'pending')
+  if (pending.length > 0) {
+    if (!qc) {
+      throw new Error(
+        '[@effector-tanstack-query/react] useSuspenseQueries: no QueryClient is set. ' +
+          'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
+      )
+    }
+    const queryFor = (family as unknown as FamilyInternals<TItem>).__queryFor
+    throw Promise.all(
+      pending.map((it) =>
+        qc.fetchQuery(queryFor(it.source) as any).catch(() => undefined),
+      ),
+    )
+  }
+
+  return items.map((it) => ({
+    data: it.data as TData,
+    error: it.error,
+    status: 'success' as const,
+    isPending: false as const,
+    isSuccess: true as const,
+    isError: false as const,
+    isFetching: it.isFetching,
+    isPlaceholderData: it.isPlaceholderData,
+    fetchStatus: it.fetchStatus,
+    refresh: () => refreshOne(it.source),
+  }))
 }
