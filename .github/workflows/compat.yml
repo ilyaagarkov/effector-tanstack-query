@@ -1,0 +1,77 @@
+name: Compat matrix
+
+# Watchdog workflow: verifies the declared peer-dep ranges
+# (react ^18 || ^19, next 15/16) actually build & test, instead of only
+# the single version pinned in the lockfile. Not run per-PR — it's slow.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+
+concurrency:
+  group: compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compat:
+    name: React ${{ matrix.react }} + Next ${{ matrix.next }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { react: '18.3', next: '15' } # old stack
+          - { react: '19', next: '15' } # smoke React 19 + previous Next
+          - { react: '19', next: '16' } # current stack
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Pin react/next via pnpm.overrides
+        env:
+          REACT: ${{ matrix.react }}
+          NEXT: ${{ matrix.next }}
+        run: |
+          REACT_MAJOR=${REACT%%.*}
+          jq \
+            --arg react "^${REACT}" \
+            --arg reactDom "^${REACT}" \
+            --arg typesReact "^${REACT_MAJOR}" \
+            --arg typesReactDom "^${REACT_MAJOR}" \
+            --arg next "^${NEXT}" \
+            '.pnpm.overrides += {
+              "react": $react,
+              "react-dom": $reactDom,
+              "@types/react": $typesReact,
+              "@types/react-dom": $typesReactDom,
+              "next": $next
+            }' \
+            package.json > package.json.tmp && mv package.json.tmp package.json
+          echo "Applied overrides:"
+          jq '.pnpm.overrides' package.json
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Type check
+        run: pnpm test:types
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Build SSR example (Next prod build)
+        run: pnpm --filter ./examples/ssr build
+
+      - name: Build CSR example (Vite)
+        run: pnpm --filter ./examples/csr build
