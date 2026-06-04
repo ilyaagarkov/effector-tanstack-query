@@ -8,8 +8,14 @@ import type {
   FetchStatus,
   HydrateOptions,
   MutateOptions,
+  MutationFilters,
+  QueryFilters,
   QueryStatus,
 } from '@tanstack/query-core'
+
+// Re-exported for convenience so consumers can type filter arguments without a
+// direct `@tanstack/query-core` import.
+export type { QueryFilters, MutationFilters } from '@tanstack/query-core'
 import { $queryClient } from '@effector-tanstack-query/core'
 import type {
   InfiniteQueryResult,
@@ -165,6 +171,62 @@ export function useMutation<TData = unknown, TError = Error, TVariables = void>(
   }, [start, unmount])
 
   return { ...state, mutate, mutateWith, reset }
+}
+
+// =============================================================================
+// useIsFetching / useIsMutating — global in-flight counters for the scope's
+// QueryClient. Thin React-subscription wrappers over the QueryClient's own
+// `isFetching()` / `isMutating()` — the counting is done by tanstack, not here.
+// =============================================================================
+
+/**
+ * Number of queries currently fetching in the scope's `QueryClient`. Use for
+ * global indicators — top-bar spinners, tray badges, etc.
+ *
+ * Pass `QueryFilters` to scope the count (e.g. `{ queryKey: ['user'] }`).
+ * Filters are applied by value on every notification, so passing a fresh
+ * object literal each render is fine — no `useMemo` needed.
+ *
+ * Resolves the client via `useUnit($queryClient)`, so each fork scope counts
+ * its own in-flight queries. Returns `0` when no client is set (e.g. an
+ * RSC/SSR pass with no scope client) instead of throwing.
+ */
+export function useIsFetching(filters?: QueryFilters): number {
+  const qc = useUnit($queryClient)
+  // Keep filters out of the subscribe dependency so a fresh literal each render
+  // doesn't re-subscribe; getSnapshot reads the latest via the ref.
+  const filtersRef = React.useRef(filters)
+  filtersRef.current = filters
+
+  return React.useSyncExternalStore(
+    React.useCallback(
+      (notify) => qc?.getQueryCache().subscribe(notify) ?? (() => {}),
+      [qc],
+    ),
+    () => qc?.isFetching(filtersRef.current) ?? 0,
+    () => 0,
+  )
+}
+
+/**
+ * Number of mutations currently running in the scope's `QueryClient`. Mirrors
+ * {@link useIsFetching} for mutations.
+ *
+ * Pass `MutationFilters` to scope the count (e.g. `{ mutationKey: ['createUser'] }`).
+ */
+export function useIsMutating(filters?: MutationFilters): number {
+  const qc = useUnit($queryClient)
+  const filtersRef = React.useRef(filters)
+  filtersRef.current = filters
+
+  return React.useSyncExternalStore(
+    React.useCallback(
+      (notify) => qc?.getMutationCache().subscribe(notify) ?? (() => {}),
+      [qc],
+    ),
+    () => qc?.isMutating(filtersRef.current) ?? 0,
+    () => 0,
+  )
 }
 
 export interface UseInfiniteQueryResult<TData, TError> {
