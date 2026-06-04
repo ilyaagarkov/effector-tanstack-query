@@ -308,3 +308,149 @@ export interface MutationResult<
     failure: Event<{ params: TVariables; error: TError }>
   }
 }
+
+/**
+ * Per-item snapshot inside a `createQueries` family. Parallel to the
+ * factory's `source` array — one entry per item, in source order.
+ */
+export interface QueryItemState<TItem, TData, TError = Error> {
+  /** The source item this entry was derived from. */
+  source: TItem
+  data: TData | undefined
+  error: TError | null
+  status: QueryStatus
+  isPending: boolean
+  isFetching: boolean
+  isSuccess: boolean
+  isError: boolean
+  isPlaceholderData: boolean
+  fetchStatus: FetchStatus
+}
+
+/**
+ * Per-item query options produced by `createQueries({ query })`. A pure
+ * function of one source item — no effector stores, no closures over
+ * mutable state. Reactivity comes from the source store; whenever it
+ * updates, this callback re-runs to compute fresh options.
+ *
+ * `enabled` is a plain boolean (not a `Store`) for the same reason —
+ * it's derived from the item, so reactivity is already covered.
+ */
+export interface CreateQueriesItemOptions<
+  TQueryFnData,
+  TError,
+  TData,
+  TQueryKey extends ReadonlyArray<unknown>,
+> extends Omit<
+    QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
+    'queryKey' | 'enabled'
+  > {
+  queryKey: TQueryKey
+  enabled?: boolean
+}
+
+export interface CreateQueriesOptions<
+  TItem,
+  TQueryFnData = unknown,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends ReadonlyArray<unknown> = ReadonlyArray<unknown>,
+> {
+  /**
+   * Stable name used to derive the SID of the result `$items` store so
+   * `serialize(scope)` round-trips it for SSR. Without a name, the
+   * QueryClient cache still hydrates via `dehydrate`/`hydrate`, but the
+   * `$items` snapshot is silently dropped from `serialize(scope)`.
+   */
+  name?: string
+  /**
+   * Reactive list of items. Each item becomes one parallel query in the
+   * family. Adding / removing items updates the family (spawn / dispose
+   * observer). Order is preserved in `$items`.
+   *
+   * Duplicates in `source` deduplicate observers (same `queryKey` hash)
+   * but produce separate `$items` entries — one per occurrence.
+   */
+  source: Store<ReadonlyArray<TItem>>
+  /**
+   * Per-item options builder. MUST be pure — same item in, same options
+   * out. Reactivity is driven by the source store; this callback fires
+   * synchronously when source updates.
+   */
+  query: (
+    item: TItem,
+  ) => CreateQueriesItemOptions<TQueryFnData, TError, TData, TQueryKey>
+  /** Shared QueryObserver defaults applied on top of `query(item)`. */
+  staleTime?: number
+  gcTime?: number
+  retry?: QueryObserverOptions<TQueryFnData, TError, TData>['retry']
+  retryDelay?: QueryObserverOptions<TQueryFnData, TError, TData>['retryDelay']
+  refetchOnMount?: QueryObserverOptions<
+    TQueryFnData,
+    TError,
+    TData
+  >['refetchOnMount']
+  refetchOnReconnect?: QueryObserverOptions<
+    TQueryFnData,
+    TError,
+    TData
+  >['refetchOnReconnect']
+  refetchOnWindowFocus?: QueryObserverOptions<
+    TQueryFnData,
+    TError,
+    TData
+  >['refetchOnWindowFocus']
+  networkMode?: QueryObserverOptions<
+    TQueryFnData,
+    TError,
+    TData
+  >['networkMode']
+}
+
+/**
+ * Result of `createQueries(...)`. A reactive "family" of parallel
+ * queries indexed by a source store. Composes naturally with
+ * `useUnit($items)` for non-Suspense usage and with
+ * `useQueries(family)` / `useSuspenseQueries(family)` for React-style
+ * consumption.
+ */
+export interface QueriesResult<TItem, TData = unknown, TError = Error> {
+  /** Per-item snapshots, parallel to `source`. */
+  $items: Store<ReadonlyArray<QueryItemState<TItem, TData, TError>>>
+  /** Just the `data` field of `$items` — shortcut for common UIs. */
+  $data: Store<ReadonlyArray<TData | undefined>>
+  /** `true` while **any** query in the family is pending. */
+  $isPending: Store<boolean>
+  /** `true` only when **every** query in the family has succeeded. */
+  $isSuccess: Store<boolean>
+  /** `true` if **any** query in the family is currently fetching. */
+  $isFetching: Store<boolean>
+  /** `true` if **any** query in the family errored. */
+  $isError: Store<boolean>
+  /**
+   * Triggers a parallel `fetchQuery` for every current source item.
+   * SSR-friendly — `await allSettled(family.prefetch, { scope })`
+   * returns after every queryFn has resolved (or failed).
+   */
+  prefetch: EventCallable<void>
+  /**
+   * Increment the per-scope refcount and ensure every observer is
+   * subscribed to the QueryClient. Call from `useEffect` (or its
+   * effector equivalent). The matching `unmounted()` decrements; when
+   * the count hits zero, observers unsubscribe.
+   */
+  mounted: EventCallable<void>
+  unmounted: EventCallable<void>
+  /** Invalidates every query in the family — re-fetches in background. */
+  refresh: EventCallable<void>
+  /** Invalidates one specific item's query. */
+  refreshOne: EventCallable<TItem>
+  /** See {@link QueryResult.$queryClient}. */
+  $queryClient: Store<QueryClient | null>
+  /**
+   * Discriminator that lets `useQueries` / `useSuspenseQueries` and
+   * other helpers distinguish a family from a tuple of factories at
+   * runtime. Not part of the public API.
+   */
+  readonly __family: true
+}
