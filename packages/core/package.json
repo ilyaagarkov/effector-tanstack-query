@@ -49,10 +49,13 @@
     "clean": "rm -rf ./dist ./coverage",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit",
+    "check:publish": "publint && attw --pack ."
   },
   "devDependencies": {
-    "@tanstack/query-core": "^5.100.10"
+    "@arethetypeswrong/cli": "^0.18.3",
+    "@tanstack/query-core": "^5.100.10",
+    "publint": "^0.3.21"
   },
   "peerDependencies": {
     "@tanstack/query-core": "^5.0.0",
