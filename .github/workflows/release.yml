@@ -36,6 +36,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check publishability
+        run: pnpm check:publish
+
       - name: Publish all workspace packages to npm
         run: pnpm release
         env:

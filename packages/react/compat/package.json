@@ -1,0 +1,5 @@
+{
+  "main": "../dist/compat.cjs",
+  "module": "../dist/compat.js",
+  "types": "../dist/compat.d.ts"
+}

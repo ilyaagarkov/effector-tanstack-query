@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check publishability
+        run: pnpm check:publish
+
       - name: Upload coverage
         if: matrix.node == 20
         uses: actions/upload-artifact@v4
