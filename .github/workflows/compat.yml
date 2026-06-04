@@ -1,10 +1,21 @@
 name: Compat matrix
 
-# Watchdog workflow: verifies the declared peer-dep ranges
-# (react ^18 || ^19, next 15/16) actually build & test, instead of only
-# the single version pinned in the lockfile. Not run per-PR — it's slow.
+# Verifies the declared peer-dep ranges (react ^18 || ^19, next 15/16)
+# actually build & test, instead of only the single version pinned in the
+# lockfile.
+#
+# Runs the full matrix on schedule, manual dispatch, and on PRs that touch
+# compat-relevant files (path filter keeps it off doc/unrelated PRs).
 
 on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'packages/react/**'
+      - 'examples/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/compat.yml'
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
