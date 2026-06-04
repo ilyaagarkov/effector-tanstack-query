@@ -14,7 +14,12 @@ import {
   createRemove,
   createReset,
 } from '../createCacheAction'
-import type { QueriesResult, QueryItemState } from '../types'
+import type {
+  CreateInfiniteQueryOptions,
+  CreateQueryOptions,
+  QueriesResult,
+  QueryItemState,
+} from '../types'
 
 // Type-level tests verify that generic inference flows correctly:
 //   - queryFn return → TQueryFnData
@@ -217,6 +222,36 @@ describe('createQueries type narrowing', () => {
         }
       },
     })
+  })
+})
+
+describe('queryFn context exposes the AbortSignal', () => {
+  // `signal` is surfaced by TanStack's QueryObserverOptions, not by our own
+  // option types — these assert the spread pass-through keeps it visible.
+  it('createQuery queryFn context has a typed `signal`', () => {
+    type Ctx = Parameters<
+      Extract<
+        NonNullable<CreateQueryOptions<string>['queryFn']>,
+        (...args: never) => unknown
+      >
+    >[0]
+
+    expectTypeOf<Ctx>().toHaveProperty('signal')
+    expectTypeOf<Ctx['signal']>().toEqualTypeOf<AbortSignal>()
+  })
+
+  it('createInfiniteQuery queryFn context has a typed `signal`', () => {
+    type Ctx = Parameters<
+      Extract<
+        NonNullable<
+          CreateInfiniteQueryOptions<{ id: number }, Error, number>['queryFn']
+        >,
+        (...args: never) => unknown
+      >
+    >[0]
+
+    expectTypeOf<Ctx>().toHaveProperty('signal')
+    expectTypeOf<Ctx['signal']>().toEqualTypeOf<AbortSignal>()
   })
 })
 

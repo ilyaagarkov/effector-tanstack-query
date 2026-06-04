@@ -44,6 +44,21 @@ function createInfiniteQuery<
 | `name`                 | `string` (recommended)                                | Stable name for SID-based SSR          |
 | ...rest                | All other `InfiniteQueryObserverOptions`              | `select`, `staleTime`, `placeholderData`, ... |
 
+## Cancellation
+
+Like `createQuery`, the page `queryFn` receives the standard TanStack [`AbortSignal`](https://tanstack.com/query/latest/docs/framework/react/guides/query-cancellation) as `context.signal`. Forward it to `fetch` and in-flight page requests cancel automatically on key change, `unmounted()`, or a [`createCancel`](/effector-tanstack-query/api/cache-actions/) event.
+
+```ts
+const postsQuery = createInfiniteQuery({
+  name: 'posts',
+  queryKey: ['posts'],
+  queryFn: ({ pageParam, signal }) =>
+    fetch(`/api/posts?page=${pageParam}`, { signal }).then((r) => r.json()),
+  getNextPageParam: (last) => last.next,
+  initialPageParam: 0,
+})
+```
+
 ## Return value (`InfiniteQueryResult<TData, TError, TPageParam>`)
 
 In addition to the base `QueryResult` fields:

@@ -39,6 +39,19 @@ type EffectorQueryKey = ReadonlyArray<
 >
 ```
 
+## Cancellation
+
+`queryFn` receives the standard TanStack [`AbortSignal`](https://tanstack.com/query/latest/docs/framework/react/guides/query-cancellation) as `context.signal`. Forward it to `fetch` (or any abortable API) and in-flight requests are cancelled automatically on key change, `unmounted()`, or a [`createCancel`](/effector-tanstack-query/api/cache-actions/) event — no extra wiring.
+
+```ts
+const userQuery = createQuery({
+  name: 'user',
+  queryKey: ['user', $userId],
+  queryFn: ({ queryKey, signal }) =>
+    fetch(`/api/user/${queryKey[1]}`, { signal }).then((r) => r.json()),
+})
+```
+
 ## Return value (`QueryResult<TData, TError>`)
 
 | Field                | Type                                          | Description                              |
