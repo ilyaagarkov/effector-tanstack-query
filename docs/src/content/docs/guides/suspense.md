@@ -52,7 +52,9 @@ In the Next.js App Router (and any other RSC-style runtime), the rendering scope
 - The hook reads `$status === 'success'` and returns `$data` synchronously — server-rendered HTML carries the data, no Suspense fallback shown.
 - On client hydration the same path runs against the populated browser stores. After mount, the observer is materialised against the singleton browser `QueryClient` and takes over for subsequent refetches / cache-miss suspensions.
 
-The error message *"useSuspenseQuery: no QueryClient is set"* only fires now when **both** the observer cannot be built **and** the store status is `'pending'` — i.e. the consumer landed in a scope with no `QueryClient` **and** no prefetch.
+When **both** the observer cannot be built **and** the store status is `'pending'` — no `QueryClient` anywhere and no prefetch — there is nothing to fetch with, and the hook throws. On the **server** that is a legitimate setup (a query meant to run in the browser only): the thrown error carries Next's `BAILOUT_TO_CLIENT_SIDE_RENDERING` digest, so the `<Suspense>` fallback lands in the HTML, React re-renders the boundary on the client where the scope's client is set, and Next does not log it as an application error. Nothing is fetched on the server. In the **browser** the same state is a real misconfiguration, so the message stays loud: *"useSuspenseQuery: no QueryClient is set…"*.
+
+To render such a query on the server instead, prefetch it with `prefetchQueries` before serializing the scope (above).
 
 ## Cache hits don't suspend
 
