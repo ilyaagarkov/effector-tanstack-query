@@ -50,8 +50,11 @@ The hook reads from effector stores when no observer can be materialised (the RS
 
 For full SSR setup see the [Suspense guide](/effector-tanstack-query/guides/suspense/) — the "SSR store fallback" section applies to `useSuspenseQueries` the same way.
 
-## Error message
+## No QueryClient anywhere
 
-If **any** query lands in `pending` status with no observer and no `QueryClient` in scope (genuine misconfiguration — no `setQueryClient` AND no prefetch), the hook throws:
+If **any** query lands in `pending` status with no observer and no `QueryClient` in scope, there is nothing to fetch with, so the hook throws. What it throws depends on where it runs:
 
-> `useSuspenseQueries: no QueryClient is set. Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).`
+- **Server render.** A legitimate setup: the query simply runs in the browser instead. The thrown error carries Next's `BAILOUT_TO_CLIENT_SIDE_RENDERING` digest, so the `<Suspense>` fallback goes into the HTML, the boundary is re-rendered on the client, and Next does not log it as an application error.
+- **Browser.** A genuine misconfiguration — nothing will ever fetch — so the message names the fix:
+
+  > `useSuspenseQueries: no QueryClient is set. Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).`

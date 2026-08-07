@@ -453,6 +453,43 @@ export interface UseSuspenseQueryResult<TData, TError = Error> {
   refresh: () => void
 }
 
+// Next's protocol for "this subtree can't render on the server, hand it to the
+// client": an Error whose `digest` is this exact string. Next's error handler
+// checks only that field (`isBailoutToCSRError`), skips logging it, and keeps
+// React's normal recovery — the `<Suspense>` fallback goes into the HTML and
+// the boundary is re-rendered in the browser. It is what `next/dynamic` with
+// `ssr: false` throws.
+const BAILOUT_TO_CSR = 'BAILOUT_TO_CLIENT_SIDE_RENDERING'
+
+/**
+ * The suspense hooks' "no QueryClient anywhere, no prefetched data" case.
+ *
+ * There is no third option here: a hook can only return data or throw, and the
+ * two things worth throwing both need a client (a fetch promise) or are what
+ * we're doing (an error). A never-resolving promise is not an option — it
+ * keeps the SSR stream open forever.
+ *
+ * On the **server** that is a legitimate setup: a query meant to run in the
+ * browser only. Nothing is fetched here, and the bail-out digest makes the
+ * hand-off explicit instead of an application error in the logs. Outside Next
+ * the field is inert and the error behaves as before.
+ *
+ * On the **client** the same state is a real misconfiguration — nothing will
+ * ever fetch — so it stays loud and explains the fix.
+ */
+function noQueryClientError(hook: string): Error {
+  if (typeof window === 'undefined') {
+    const error = new Error(
+      `Bail out to client-side rendering: [@effector-tanstack-query/react] ${hook} has no QueryClient during the server render, so the query runs on the client. To render it on the server instead, prefetch it with prefetchQueries before serializing the scope.`,
+    )
+    ;(error as Error & { digest?: string }).digest = BAILOUT_TO_CSR
+    return error
+  }
+  return new Error(
+    `[@effector-tanstack-query/react] ${hook}: no QueryClient is set. Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).`,
+  )
+}
+
 /**
  * Reads a query for use inside a `<Suspense>` boundary. While the query is
  * pending, throws an inflight promise (queryClient-deduplicated). On error,
@@ -523,10 +560,7 @@ export function useSuspenseQuery<TData, TError = Error>(
   // misconfiguration as an error to `<ErrorBoundary>`.
   if (state.status === 'error') throw state.error
   if (state.status === 'pending') {
-    throw new Error(
-      '[@effector-tanstack-query/react] useSuspenseQuery: no QueryClient is set. ' +
-        'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
-    )
+    throw noQueryClientError('useSuspenseQuery')
   }
 
   return {
@@ -654,10 +688,7 @@ export function useSuspenseInfiniteQuery<
   // Store-only path (server-RSC of a hydrated scope).
   if (state.status === 'error') throw state.error
   if (state.status === 'pending') {
-    throw new Error(
-      '[@effector-tanstack-query/react] useSuspenseInfiniteQuery: no QueryClient is set. ' +
-        'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
-    )
+    throw noQueryClientError('useSuspenseInfiniteQuery')
   }
 
   return {
@@ -898,10 +929,7 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
         pendingPromises.push(obs.fetchOptimistic(obs.options))
       }
     } else if (statuses[i] === 'pending') {
-      throw new Error(
-        '[@effector-tanstack-query/react] useSuspenseQueries: no QueryClient is set. ' +
-          'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
-      )
+      throw noQueryClientError('useSuspenseQueries')
     }
   }
   if (pendingPromises.length > 0) throw Promise.all(pendingPromises)
@@ -957,10 +985,7 @@ function useSuspenseQueriesFamily<TItem, TData, TError>(
   const pending = items.filter((it) => it.status === 'pending')
   if (pending.length > 0) {
     if (!qc) {
-      throw new Error(
-        '[@effector-tanstack-query/react] useSuspenseQueries: no QueryClient is set. ' +
-          'Call setQueryClient(qc) or pass it to fork({ values: [[$queryClient, qc]] }).',
-      )
+      throw noQueryClientError('useSuspenseQueries')
     }
     const queryFor = (family as unknown as FamilyInternals<TItem>).__queryFor
     throw Promise.all(
