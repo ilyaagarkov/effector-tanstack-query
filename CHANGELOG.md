@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share this changelog. Per-release version numbers below indicate which package shipped which change; entries for a single package mention the other staying at its previous version.
 
+## [1.0.0] — 2026-08-07
+
+Stable 1.0. The public API is unchanged from `1.0.0-rc.1`; this release publishes it under the `latest` dist-tag.
+
+### Fixed
+
+- **Suspense during SSR without a prefetch** ([#15](https://github.com/ilyaagarkov/effector-tanstack-query/issues/15)). `useSuspenseQuery` threw `no QueryClient is set` on the server pass of a client component whenever the route had no `prefetchQueries`: `$queryClient` is `serialize: 'ignore'`, so a scope rebuilt from `serialize(scope)` carries no client, and there was nothing to suspend on.
+
+  That state is legitimate — it means the query runs in the browser. The hook still has to throw (a hook cannot return "pending", and a never-resolving promise would hold the SSR stream open), so it now throws an error carrying Next's `BAILOUT_TO_CLIENT_SIDE_RENDERING` digest — the protocol `next/dynamic` with `ssr: false` uses. Next skips logging it, React puts the `<Suspense>` fallback in the HTML and re-renders the boundary on the client. Nothing is fetched on the server, and outside Next the digest is inert.
+
+  In the browser the same state is still a real misconfiguration, so the message stays loud and unchanged. Applies to `useSuspenseQuery`, `useSuspenseInfiniteQuery` and `useSuspenseQueries`.
+
+### Install
+
+```bash
+npm install @effector-tanstack-query/core @effector-tanstack-query/react
+```
+
 ## [1.0.0-rc.1] — 2026-06-04
 
 First release candidate for the upcoming stable 1.0. No API changes vs `0.5.0` — this RC freezes the public surface and asks for real-world validation before the stable cut.
