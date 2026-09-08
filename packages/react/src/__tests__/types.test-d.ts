@@ -1,9 +1,11 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { createStore } from 'effector'
 import type { QueryClient } from '@tanstack/query-core'
+import { queryOptions } from '@tanstack/react-query'
 import {
   createQueries,
   createQuery,
+  createQueryFromOptions,
   type QueriesResult,
 } from '@effector-tanstack-query/core'
 import {
@@ -30,6 +32,47 @@ const postsQuery = createQuery(queryClient, {
   name: 'types.posts',
   queryKey: ['posts'],
   queryFn: () => Promise.resolve([1, 2, 3]),
+})
+
+const $todoId = createStore(1)
+const todoOptions = ({ todoId }: { todoId: number }) =>
+  queryOptions({
+    queryKey: ['todo', todoId] as const,
+    queryFn: () => Promise.resolve({ id: todoId, title: 'Learn Effector' }),
+  })
+
+const todoQuery = createQueryFromOptions(queryClient, {
+  name: 'types.todoFromOptions',
+  source: { todoId: $todoId },
+  queryOptions: todoOptions,
+})
+
+const todoTitleOptions = ({ todoId }: { todoId: number }) =>
+  queryOptions({
+    ...todoOptions({ todoId }),
+    select: (todo) => todo.title,
+  })
+
+const todoTitleQuery = createQueryFromOptions(queryClient, {
+  name: 'types.todoTitleFromOptions',
+  source: { todoId: $todoId },
+  queryOptions: (source) => {
+    expectTypeOf(source).toEqualTypeOf<{ todoId: number }>()
+    return todoTitleOptions(source)
+  },
+})
+
+describe('createQueryFromOptions — queryOptions inference', () => {
+  it('infers source and data from a standard TanStack factory', () => {
+    expectTypeOf(todoQuery.$data).toEqualTypeOf<
+      import('effector').Store<
+        { id: number; title: string } | undefined
+      >
+    >()
+    expectTypeOf(todoTitleQuery.$data).toEqualTypeOf<
+      import('effector').Store<string | undefined>
+    >()
+  })
 })
 
 describe('useQueries — tuple overload', () => {
