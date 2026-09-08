@@ -164,3 +164,7 @@ class HttpError extends Error { code = 0 }
 const q = createQuery<User, HttpError>({ /* ... */ })
 // q.$error: Store<HttpError | null>
 ```
+
+To keep `queryKey` and `queryFn` in a reusable standard TanStack Query Options
+factory while its parameters come from stores, use
+[`createQueryFromOptions`](/effector-tanstack-query/api/create-query-from-options/).

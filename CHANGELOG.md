@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share this changelog. Per-release version numbers below indicate which package shipped which change; entries for a single package mention the other staying at its previous version.
 
+## [Unreleased]
+
+### Added
+
+- **`createQueryFromOptions({ source, queryOptions })`** evaluates a standard
+  TanStack Query Options factory with resolved Effector store values. The
+  complete returned options object stays reactive while existing lifecycle,
+  prefetch, SSR, fork-isolation, and Suspense behavior is preserved.
+
 ## [1.0.0] — 2026-08-07
 
 Stable 1.0. The public API is unchanged from `1.0.0-rc.1`; this release publishes it under the `latest` dist-tag.

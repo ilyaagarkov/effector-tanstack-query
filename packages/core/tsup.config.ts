@@ -9,6 +9,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/createQuery.ts',
+    'src/createQueryFromOptions.ts',
     'src/createInfiniteQuery.ts',
     'src/createQueries.ts',
     'src/createMutation.ts',

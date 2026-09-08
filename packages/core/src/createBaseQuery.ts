@@ -29,6 +29,15 @@ export interface BaseObserverLike<TResult> {
   destroy(): void
 }
 
+type ObserverOptionsLike = { queryKey: QueryKey; enabled?: unknown }
+
+interface BaseObserverInput {
+  key: QueryKey
+  enabled: boolean
+  refetchInterval: number | false | undefined
+  observerOptions?: ObserverOptionsLike
+}
+
 /**
  * The subset of observer result fields that createBaseQuery wires up
  * into stores common to all query flavors.
@@ -95,19 +104,34 @@ export interface BaseQueryStores<TData, TError, TObserver> {
   }
 }
 
-export interface BaseQueryOptions {
-  queryKey: EffectorQueryKey
-  enabled?: StoreOrValue<boolean>
-  /**
-   * Pre-resolved reactive `refetchInterval`. The per-flavor factory extracts
-   * the original option, and — if it's a Store — passes the Store here while
-   * stripping the value from the observer constructor options. Static values
-   * and function forms continue to flow through `restOptions` to the
-   * observer.
-   */
-  reactiveRefetchInterval?: Store<number | false | undefined>
+export type BaseQueryOptions = {
   name?: string
-}
+} & (
+  | {
+      queryKey: EffectorQueryKey
+      enabled?: StoreOrValue<boolean>
+      /**
+       * Pre-resolved reactive `refetchInterval`. The per-flavor factory
+       * extracts the original option, and — if it's a Store — passes the
+       * Store here while stripping the value from the observer constructor
+       * options. Static values and function forms continue to flow through
+       * `restOptions` to the observer.
+       */
+      reactiveRefetchInterval?: Store<number | false | undefined>
+      observerOptions?: never
+    }
+  | {
+      /**
+       * Complete observer options produced by a reactive options factory.
+       * These options are applied as a whole on every update instead of
+       * resolving individual reactive fields.
+       */
+      observerOptions: Store<ObserverOptionsLike>
+      queryKey?: never
+      enabled?: never
+      reactiveRefetchInterval?: never
+    }
+)
 
 const SID_PREFIX = '@tanstack/query-effector'
 
@@ -166,8 +190,17 @@ export interface CreateBaseQueryConfig<
   /** Build the observer for the current scope. Receives the resolved client. */
   createObserver: (
     queryClient: QueryClient,
-    initial: { queryKey: QueryKey; enabled: boolean },
+    initial: {
+      queryKey: QueryKey
+      enabled: boolean
+      observerOptions?: ObserverOptionsLike
+    },
   ) => TObserver
+  /** Apply complete options from a reactive options factory. */
+  applyObserverOptions?: (
+    observer: TObserver,
+    options: ObserverOptionsLike,
+  ) => void
   /**
    * Hook for query flavors that need additional stores/events (e.g. infinite
    * query's hasNextPage, fetchNextPage). Called once at factory time.
@@ -187,8 +220,14 @@ export function createBaseQuery<
   config: CreateBaseQueryConfig<TData, TError, TResult, TObserver, TExtraStores>,
 ): BaseQueryStores<TData, TError, TObserver> & TExtraStores {
   const { name, reactiveRefetchInterval: $reactiveRefetchInterval } = options
-  const $resolvedKey = resolveKey(options.queryKey)
-  const $enabled = resolveEnabled(options.enabled)
+  const $resolvedKey = options.observerOptions
+    ? options.observerOptions.map((observerOptions) => observerOptions.queryKey)
+    : resolveKey(options.queryKey ?? [])
+  const $enabled = options.observerOptions
+    ? options.observerOptions.map(
+        (observerOptions) => observerOptions.enabled !== false,
+      )
+    : resolveEnabled(options.enabled)
 
   // If an explicit client is passed, the factory is locked to it. fork()
   // values cannot override the captured value because $effectiveClient is a
@@ -270,11 +309,8 @@ export function createBaseQuery<
         key,
         enabled,
         refetchInterval,
-      }: {
-        key: QueryKey
-        enabled: boolean
-        refetchInterval: number | false | undefined
-      },
+        observerOptions,
+      }: BaseObserverInput,
     ) => {
       if (!qc) {
         throw new Error(
@@ -285,7 +321,11 @@ export function createBaseQuery<
 
       const observer =
         existingObserver ??
-        config.createObserver(qc, { queryKey: key, enabled })
+        config.createObserver(qc, {
+          queryKey: key,
+          enabled,
+          observerOptions,
+        })
 
       const dispatchData = scopeBind(dataUpdated, { safe: true })
       const dispatchError = scopeBind(errorUpdated, { safe: true })
@@ -309,15 +349,19 @@ export function createBaseQuery<
       let lastErrorUpdatedAt = -1
 
       observerSubscriptions.get(observer)?.()
-      observer.setOptions({
-        ...observer.options,
-        queryKey: key,
-        enabled,
-        // Only override refetchInterval when the user provided a reactive
-        // Store — otherwise the static value (or function) from the observer
-        // constructor wins.
-        ...($reactiveRefetchInterval ? { refetchInterval } : {}),
-      })
+      if (observerOptions && config.applyObserverOptions) {
+        config.applyObserverOptions(observer, observerOptions)
+      } else {
+        observer.setOptions({
+          ...observer.options,
+          queryKey: key,
+          enabled,
+          // Only override refetchInterval when the user provided a reactive
+          // Store — otherwise the static value (or function) from the observer
+          // constructor wins.
+          ...($reactiveRefetchInterval ? { refetchInterval } : {}),
+        })
+      }
 
       const dispatch = (result: TResult) => {
         dispatchData(result.data)
@@ -368,9 +412,9 @@ export function createBaseQuery<
 
   sample({ clock: mountFx.doneData, target: observerCreated })
 
-  // Runs when key / enabled / reactive refetchInterval change after mount.
-  // Only updates observer options — subscription + dispatchers were already
-  // wired in mountFx.
+  // Runs when reactive observer inputs change after mount. Only updates
+  // observer options — subscription + dispatchers were already wired in
+  // mountFx.
   const updateObserverFx = attach({
     source: $observer,
     effect: (
@@ -379,13 +423,14 @@ export function createBaseQuery<
         key,
         enabled,
         refetchInterval,
-      }: {
-        key: QueryKey
-        enabled: boolean
-        refetchInterval: number | false | undefined
-      },
+        observerOptions,
+      }: BaseObserverInput,
     ) => {
       if (!observer) return
+      if (observerOptions && config.applyObserverOptions) {
+        config.applyObserverOptions(observer, observerOptions)
+        return
+      }
       // Strip _defaulted and queryHash so defaultQueryOptions() recomputes
       // the hash for the new key. Without this, the old hash is preserved and
       // QueryObserver#updateQuery() finds the old query — no key switch, no fetch.
@@ -414,18 +459,27 @@ export function createBaseQuery<
     .on(mounted, () => true)
     .on(unmounted, () => false)
 
-  // Combine of all reactive options that drive observer.setOptions. Built once
-  // so mountFx and updateObserverFx see the same shape. When the user didn't
-  // pass a reactive `refetchInterval`, we fall back to a static-`false` store
-  // (its emitted value is never read — the spread is guarded by the original
-  // `$reactiveRefetchInterval` reference).
-  const $observerOptions = combine({
-    key: $resolvedKey,
-    enabled: $enabled,
-    refetchInterval:
-      $reactiveRefetchInterval ??
-      createStore<number | false | undefined>(false),
-  })
+  // One store for every reactive input that drives observer.setOptions, so
+  // mountFx and updateObserverFx always see the same shape. Static queries
+  // combine their individual reactive fields; factory queries map their
+  // complete observer-options store.
+  const $observerOptions: Store<BaseObserverInput> = options.observerOptions
+    ? options.observerOptions.map((observerOptions) => ({
+        key: observerOptions.queryKey,
+        enabled: observerOptions.enabled !== false,
+        refetchInterval: undefined,
+        observerOptions,
+      }))
+    : combine({
+        key: $resolvedKey,
+        enabled: $enabled,
+        refetchInterval:
+          $reactiveRefetchInterval ??
+          createStore<number | false | undefined>(false),
+        observerOptions: createStore<undefined>(undefined, {
+          skipVoid: false,
+        }),
+      })
 
   sample({
     clock: mounted,
