@@ -15,9 +15,10 @@ units. It doesn't reimplement the cache, dedup, or revalidation — it forwards
 them. Every observer field (`data`, `status`, `isPending`, …) becomes a
 `Store<T>`, every imperative action (`refetch`, `fetchNextPage`, `mutate`, …)
 becomes an `EventCallable`. A `Store` placed inside `queryKey` triggers
-automatic refetch on change. SSR works via the two persistence layers —
-`dehydrate` + `<HydrationBoundary>` for the queryClient cache and
-`serialize(scope)` / `fork({ values })` for the effector graph.
+automatic refetch on change; `createQueryFromOptions` connects reactive source
+values to reusable TanStack Query Options factories. SSR works via the two
+persistence layers — `dehydrate` + `<HydrationBoundary>` for the queryClient
+cache and `serialize(scope)` / `fork({ values })` for the effector graph.
 
 ## Documentation
 

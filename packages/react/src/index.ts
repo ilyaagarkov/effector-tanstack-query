@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { createStore } from 'effector'
 import { useUnit } from 'effector-react'
 import { hydrate } from '@tanstack/query-core'
 import type {
@@ -407,10 +408,10 @@ function useQueriesFamily<TItem, TData, TError>(
 // The scope mount chain runs in useEffect, which is skipped while a component
 // is suspended — so on the very first render the scope's `$observer` may be
 // null. To get synchronous access to the observer's promise during suspense,
-// we construct a transient observer via the factory's hidden
-// `__createObserver(qc, { queryKey, enabled })` helper. The transient observer
-// reads from / writes to the same queryClient cache as the eventual scope
-// observer (which is created when mountFx runs after useEffect commits).
+// we construct a transient observer from the factory's hidden resolved
+// options. Older query flavors fall back to the key/enabled helper. The
+// transient observer reads from / writes to the same queryClient cache as the
+// eventual scope observer (created when mountFx runs after useEffect commits).
 //
 // The mount/unmount effect is still wired up so that other consumers reading
 // the same query through `useUnit` / `useQuery` see updates in scope state.
@@ -432,7 +433,16 @@ interface SuspenseFactory<TObserver> {
   ): TObserver
   __resolvedKey: import('effector').Store<unknown>
   __enabled: import('effector').Store<boolean>
+  __createObserverFromOptions?: (
+    qc: import('@tanstack/query-core').QueryClient,
+    options: unknown,
+  ) => TObserver
+  __observerOptions?: import('effector').Store<unknown>
 }
+
+const $noObserverOptions = createStore<unknown>(null, {
+  serialize: 'ignore',
+})
 
 export interface UseSuspenseQueryResult<TData, TError = Error> {
   /** Resolved query data — non-nullable inside the rendered subtree (Suspense
@@ -756,23 +766,48 @@ function useSuspenseObserver<
   const qc = useUnit(query.$queryClient)
   const queryKey = useUnit(factory.__resolvedKey)
   const enabled = useUnit(factory.__enabled)
+  const observerOptions = useUnit(
+    factory.__observerOptions ?? $noObserverOptions,
+  )
+  const usesCompleteOptions = Boolean(
+    factory.__createObserverFromOptions && factory.__observerOptions,
+  )
 
-  // Memoize a transient observer keyed by qc, so it survives across renders
-  // while the scope observer is null. Once observerInScope appears, we
-  // switch — the transient one is unsubscribed and abandoned (it never
-  // subscribed to queryCache, so there is nothing to leak).
+  // Memoize a transient observer by client + resolved options while the scope
+  // observer is null. Once observerInScope appears, we switch — the transient
+  // one is unsubscribed and abandoned.
   const transient = React.useMemo(() => {
     if (observerInScope || !qc) return null
+    if (usesCompleteOptions) {
+      return factory.__createObserverFromOptions!(qc, observerOptions)
+    }
     return factory.__createObserver(qc, { queryKey, enabled })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [observerInScope, qc, factory])
+  }, [
+    observerInScope,
+    qc,
+    factory,
+    usesCompleteOptions,
+    observerOptions,
+    queryKey,
+    enabled,
+  ])
 
-  // Keep the transient observer's options in sync with reactive key/enabled,
-  // so re-suspending on key changes still works through it.
+  // Keep the compatibility transient path in sync; complete-option changes
+  // normally create a fresh transient through the memo above.
   React.useEffect(() => {
     if (!transient) return
+    if (usesCompleteOptions) {
+      transient.setOptions(observerOptions)
+      return
+    }
     transient.setOptions({ ...transient.options, queryKey, enabled })
-  }, [transient, queryKey, enabled])
+  }, [
+    transient,
+    usesCompleteOptions,
+    observerOptions,
+    queryKey,
+    enabled,
+  ])
 
   // Null is a legitimate return: server-RSC render of a scope built from
   // `serialize(scope)` has neither `$observer` nor `$queryClient` (both are
@@ -847,6 +882,13 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
   const enabledStates = useUnit(
     queries.map((q) => (q as unknown as SuspenseFactory<unknown>).__enabled),
   )
+  const observerOptions = useUnit(
+    queries.map(
+      (q) =>
+        (q as unknown as SuspenseFactory<unknown>).__observerOptions ??
+        $noObserverOptions,
+    ),
+  )
 
   // Transient observers per slot (null when an in-scope observer
   // exists or no qc is available). One useMemo across all queries —
@@ -856,13 +898,24 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
       if (observersInScope[i]) return null
       const qc = qcs[i]
       if (!qc) return null
-      return (q as unknown as SuspenseFactory<any>).__createObserver(qc, {
+      const factory = q as unknown as SuspenseFactory<any>
+      if (factory.__createObserverFromOptions && factory.__observerOptions) {
+        return factory.__createObserverFromOptions(qc, observerOptions[i])
+      }
+      return factory.__createObserver(qc, {
         queryKey: resolvedKeys[i],
         enabled: enabledStates[i] as boolean,
       })
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queries, ...observersInScope, ...qcs, ...resolvedKeys, ...enabledStates])
+  }, [
+    queries,
+    ...observersInScope,
+    ...qcs,
+    ...resolvedKeys,
+    ...enabledStates,
+    ...observerOptions,
+  ])
 
   type SuspendableObserver = {
     options: { queryKey: unknown }

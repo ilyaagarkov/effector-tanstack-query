@@ -5,7 +5,10 @@ import { Provider } from 'effector-react'
 import { allSettled, createEvent, createStore, fork } from 'effector'
 import { QueryClient } from '@tanstack/query-core'
 import { queryKey, sleep } from './test-utils'
-import { createQuery } from '@effector-tanstack-query/core'
+import {
+  createQuery,
+  createQueryFromOptions,
+} from '@effector-tanstack-query/core'
 import { createInfiniteQuery } from '@effector-tanstack-query/core'
 import { useSuspenseInfiniteQuery, useSuspenseQuery } from '..'
 import type { Scope, StoreWritable } from 'effector'
@@ -186,6 +189,46 @@ describe('useSuspenseQuery', () => {
     })
 
     rendered.getByText('data: id-2')
+  })
+
+  it('uses complete factory options before the mounted observer exists', async () => {
+    const setId = createEvent<number>()
+    const $id = createStore(1).on(setId, (_, id) => id)
+    const scope = fork()
+
+    const query = createQueryFromOptions(queryClient, {
+      name: 'factorySuspense',
+      source: { id: $id },
+      queryOptions: ({ id }) => ({
+        queryKey: ['factory-suspense', id] as const,
+        queryFn: () => sleep(10).then(() => ({ id, label: `item-${id}` })),
+        select: (item: { id: number; label: string }) => item.label,
+      }),
+    })
+
+    function Page() {
+      const { data } = useSuspenseQuery(query)
+      return <span>data: {data}</span>
+    }
+
+    const rendered = renderWithScope(
+      scope,
+      <React.Suspense fallback={<span>loading</span>}>
+        <Page />
+      </React.Suspense>,
+    )
+
+    rendered.getByText('loading')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11)
+    })
+    rendered.getByText('data: item-1')
+
+    await act(async () => {
+      await allSettled(setId, { scope, params: 2 })
+      await vi.advanceTimersByTimeAsync(11)
+    })
+    rendered.getByText('data: item-2')
   })
 
   it('throws error from stores to ErrorBoundary when status is error and no observer in scope', async () => {

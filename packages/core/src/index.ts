@@ -1,4 +1,5 @@
 export { createQuery } from './createQuery'
+export { createQueryFromOptions } from './createQueryFromOptions'
 export { createInfiniteQuery } from './createInfiniteQuery'
 export { createQueries } from './createQueries'
 export { createMutation } from './createMutation'
@@ -27,12 +28,15 @@ export type {
   CreateQueriesItemOptions,
   CreateQueriesOptions,
   CreateQueryOptions,
+  CreateQueryFromOptionsOptions,
   EffectorQueryKey,
   InfiniteQueryResult,
   MutationResult,
   MutationStatus,
   QueriesResult,
   QueryItemState,
+  QueryOptionsSource,
+  QueryOptionsSourceValue,
   QueryResult,
   StoreOrValue,
 } from './types'

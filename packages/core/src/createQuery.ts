@@ -1,12 +1,22 @@
-import { attach, createEvent, sample } from 'effector'
+import { attach, combine, createEvent, createStore, sample } from 'effector'
+import type { Store } from 'effector'
 import { QueryObserver } from '@tanstack/query-core'
-import type { QueryClient } from '@tanstack/query-core'
+import type {
+  QueryClient,
+  QueryKey,
+  QueryObserverOptions,
+} from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
-import { resolveReactiveRefetchInterval } from './resolve'
+import {
+  resolveEnabled,
+  resolveKey,
+  resolveReactiveRefetchInterval,
+} from './resolve'
 import type {
   CreateQueryOptions,
   EffectorQueryKey,
   QueryResult,
+  ResolvedQueryKey,
 } from './types'
 
 export function createQuery<
@@ -57,24 +67,86 @@ export function createQuery<
     delete (restOptions as { refetchInterval?: unknown }).refetchInterval
   }
 
+  const $resolvedKey = resolveKey(queryKey)
+  const $enabled = resolveEnabled(enabled)
+  const $refetchInterval =
+    reactiveRefetchInterval ??
+    createStore<number | false | undefined>(undefined, { skipVoid: false })
+  const $observerOptions = combine(
+    {
+      queryKey: $resolvedKey,
+      enabled: $enabled,
+      refetchInterval: $refetchInterval,
+    },
+    ({ queryKey: key, enabled: isEnabled, refetchInterval }) =>
+      ({
+        ...restOptions,
+        queryKey: key,
+        enabled: isEnabled,
+        ...(reactiveRefetchInterval ? { refetchInterval } : {}),
+      }) as QueryObserverOptions<
+        TQueryFnData,
+        TError,
+        TData,
+        TQueryFnData,
+        ResolvedQueryKey<TQueryKey>
+      >,
+  )
+
+  return createQueryFromObserverOptions(
+    explicitClient,
+    name,
+    $observerOptions,
+  )
+}
+
+/** Internal seam shared by static and factory-based query definitions. */
+export function createQueryFromObserverOptions<
+  TQueryFnData,
+  TError,
+  TData,
+  TQueryKey extends QueryKey,
+>(
+  explicitClient: QueryClient | null,
+  name: string | undefined,
+  $observerOptions: Store<
+    QueryObserverOptions<
+      TQueryFnData,
+      TError,
+      TData,
+      TQueryFnData,
+      TQueryKey
+    >
+  >,
+): QueryResult<TData, TError> {
   const base = createBaseQuery<
     TData,
     TError,
-    ReturnType<QueryObserver<TQueryFnData, TError, TData>['getCurrentResult']>,
-    QueryObserver<TQueryFnData, TError, TData>
+    ReturnType<
+      QueryObserver<
+        TQueryFnData,
+        TError,
+        TData,
+        TQueryFnData,
+        TQueryKey
+      >['getCurrentResult']
+    >,
+    QueryObserver<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>
   >(
     explicitClient,
-    { queryKey, enabled, name, reactiveRefetchInterval },
+    { name, observerOptions: $observerOptions },
     {
-      createObserver: (qc, { queryKey: key, enabled: isEnabled }) =>
-        // Cast: restOptions's `refetchInterval` may still type as
-        // `Store | number | false | fn`; the Store form is deleted at runtime
-        // above, but TS can't narrow that here.
-        new QueryObserver<TQueryFnData, TError, TData>(qc, {
-          ...restOptions,
-          queryKey: key,
-          enabled: isEnabled,
-        } as any),
+      createObserver: (qc, { observerOptions }) =>
+        new QueryObserver<
+          TQueryFnData,
+          TError,
+          TData,
+          TQueryFnData,
+          TQueryKey
+        >(qc, observerOptions as any),
+      applyObserverOptions: (observer, observerOptions) => {
+        observer.setOptions(observerOptions as any)
+      },
     },
   )
 
@@ -82,21 +154,17 @@ export function createQuery<
   // and **awaits** the result, so `allSettled(query.prefetch, { scope })` on
   // the server returns only after the cache has the data. Unlike `mounted`,
   // which kicks off a background subscription and resolves immediately, this
-  // is the right primitive for SSR / route loaders. The current resolved key
-  // + enabled is read from the scope via attach — reactive keys work.
+  // is the right primitive for SSR / route loaders. The current observer
+  // options are read from the scope via attach — reactive factories work too.
   const prefetch = createEvent<void>()
   const prefetchFx = attach({
     source: {
       qc: base.$queryClient,
-      key: base.$resolvedKey,
-      enabled: base.$enabled,
+      observerOptions: $observerOptions,
     },
-    effect: ({ qc, key, enabled }) => {
-      if (!qc || !enabled) return
-      return qc.fetchQuery({
-        ...restOptions,
-        queryKey: key,
-      } as any)
+    effect: ({ qc, observerOptions }) => {
+      if (!qc || observerOptions.enabled === false) return
+      return qc.fetchQuery(observerOptions as any)
     },
   })
   sample({ clock: prefetch, target: prefetchFx })
@@ -127,18 +195,27 @@ export function createQuery<
     finished: base.finished,
   }
 
-  // Internal: used by useSuspenseQuery to construct a transient observer
-  // when the suspense hook renders before mountFx has populated the scope's
-  // $observer (mountFx runs from useEffect, which is skipped while
-  // suspended). Not part of the public API; not in TS types.
+  // Internals used by useSuspenseQuery to construct a transient observer
+  // before mountFx has populated the scope's $observer. The complete-options
+  // pair supports factory-based queries; the key/enabled pair remains as a
+  // compatibility path for older query flavors. Not part of the public API.
   Object.defineProperty(result, '__createObserver', {
     enumerable: false,
     value: (qc: QueryClient, init: { queryKey: any; enabled: boolean }) =>
       new QueryObserver<TQueryFnData, TError, TData>(qc, {
-        ...restOptions,
+        ...$observerOptions.getState(),
         queryKey: init.queryKey,
         enabled: init.enabled,
       } as any),
+  })
+  Object.defineProperty(result, '__createObserverFromOptions', {
+    enumerable: false,
+    value: (qc: QueryClient, observerOptions: unknown) =>
+      new QueryObserver<TQueryFnData, TError, TData>(qc, observerOptions as any),
+  })
+  Object.defineProperty(result, '__observerOptions', {
+    enumerable: false,
+    value: $observerOptions,
   })
   Object.defineProperty(result, '__resolvedKey', {
     enumerable: false,

@@ -6,6 +6,8 @@ operations exposed as effector units.
 - Every observer field (`data`, `status`, `isPending`, …) becomes a `Store<T>`
 - Every imperative action (`refetch`, `fetchNextPage`, `mutate`, `reset`, …) is an `EventCallable`
 - A `Store` placed inside `queryKey` triggers automatic refetch on change
+- `createQueryFromOptions` evaluates reusable TanStack Query Options factories
+  from resolved reactive source values
 - SSR works via `dehydrate`/`hydrate` for the cache **and** `serialize(scope)`/`fork({ values })` for the effector graph
 
 ```bash

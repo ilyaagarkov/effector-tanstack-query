@@ -96,6 +96,55 @@ export interface CreateQueryOptions<
   name?: string
 }
 
+/** A single Store or a shape of Stores consumed by an options factory. */
+export type QueryOptionsSource =
+  | Store<unknown>
+  | Readonly<Record<string, Store<unknown>>>
+
+/** Resolve every Store in a {@link QueryOptionsSource} to its plain value. */
+export type QueryOptionsSourceValue<TSource extends QueryOptionsSource> =
+  TSource extends Store<infer TValue>
+    ? TValue
+    : {
+        -readonly [TKey in keyof TSource]: TSource[TKey] extends Store<
+          infer TValue
+        >
+          ? TValue
+          : never
+      }
+
+export interface CreateQueryFromOptionsOptions<
+  TSource extends QueryOptionsSource,
+  TQueryFnData = unknown,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+> {
+  /** Reactive parameters passed to `queryOptions` as resolved plain values. */
+  source: TSource
+  /**
+   * A standard TanStack Query Options factory. It is re-evaluated whenever
+   * `source` changes and the complete returned options object is applied to
+   * the observer.
+   */
+  queryOptions: (
+    source: QueryOptionsSourceValue<TSource>,
+  ) => QueryObserverOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    TQueryKey
+  >
+  /**
+   * Optional consumer-level reactive gate. `false` overrides the factory's
+   * `enabled`; `true` preserves it.
+   */
+  enabled?: StoreOrValue<boolean>
+  /** See {@link CreateQueryOptions.name}. */
+  name?: string
+}
+
 export interface QueryResult<TData, TError = Error> {
   /** The resolved query data, or `undefined` while loading */
   $data: Store<TData | undefined>
