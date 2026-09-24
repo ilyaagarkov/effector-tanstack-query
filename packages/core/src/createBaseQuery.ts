@@ -408,11 +408,31 @@ export function createBaseQuery<
 
   const mounted = createEvent<void>()
   const unmounted = createEvent<void>()
-  const $isMounted = createStore(false, {
-    ...sidConfig(name, '$isMounted'),
+
+  // Per-scope ref-count of consumers that called mounted(). The observer is
+  // shared by all of them: first mount (0 → 1) creates and subscribes it,
+  // last unmount (1 → 0) destroys it. Not serialized — like $observer, it
+  // describes live subscriptions that don't exist in a hydrated scope.
+  const $mountCount = createStore(0, { serialize: 'ignore' })
+  const $isMounted = $mountCount.map((count) => count > 0)
+
+  const mountCounted = sample({
+    clock: mounted,
+    source: $mountCount,
+    fn: (count) => count + 1,
   })
-    .on(mounted, () => true)
-    .on(unmounted, () => false)
+  // Extra unmounted() calls at zero are a no-op — the count never goes negative.
+  const unmountCounted = sample({
+    clock: unmounted,
+    source: $mountCount,
+    filter: (count) => count > 0,
+    fn: (count) => count - 1,
+  })
+  $mountCount
+    .on([mountCounted, unmountCounted], (_, next) => next)
+    // A consumer whose mount failed (e.g. no QueryClient) doesn't own the
+    // observer, so the next mounted() retries instead of being swallowed.
+    .on(mountFx.fail, (count) => Math.max(0, count - 1))
 
   // Combine of all reactive options that drive observer.setOptions. Built once
   // so mountFx and updateObserverFx see the same shape. When the user didn't
@@ -428,8 +448,9 @@ export function createBaseQuery<
   })
 
   sample({
-    clock: mounted,
+    clock: mountCounted,
     source: $observerOptions,
+    filter: (_, count) => count === 1,
     target: mountFx,
   })
 
@@ -455,7 +476,11 @@ export function createBaseQuery<
       observer.destroy()
     },
   })
-  sample({ clock: unmounted, target: unmountFx })
+  sample({
+    clock: unmountCounted,
+    filter: (count) => count === 0,
+    target: unmountFx,
+  })
   sample({ clock: unmountFx.finally, target: observerDestroyed })
 
   const refresh = createEvent<void>()

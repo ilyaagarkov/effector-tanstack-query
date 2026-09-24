@@ -65,8 +65,8 @@ const userQuery = createQuery({
 | `$isError`           | `Store<boolean>`                              | Failed                                   |
 | `$isPlaceholderData` | `Store<boolean>`                              | Showing placeholder                      |
 | `$fetchStatus`       | `Store<'fetching' \| 'paused' \| 'idle'>`     | Underlying fetch status                  |
-| `mounted`            | `EventCallable<void>`                         | Subscribe observer                       |
-| `unmounted`          | `EventCallable<void>`                         | Unsubscribe + cancel inflight            |
+| `mounted`            | `EventCallable<void>`                         | Bump reference count; the first mount subscribes the observer |
+| `unmounted`          | `EventCallable<void>`                         | Decrement; the last unmount unsubscribes + cancels inflight |
 | `refresh`            | `EventCallable<void>`                         | Invalidate + refetch                     |
 | `prefetch`           | `EventCallable<void>`                         | `queryClient.fetchQuery` + **awaits**; for SSR / route loaders |
 | `$observer`          | `Store<QueryObserver<TData, TError> \| null>` | Per-scope observer (created on `mounted()`) |

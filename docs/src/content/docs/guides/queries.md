@@ -210,10 +210,12 @@ for the full semantics.
 
 You must call `mounted()` (or use `useQuery(query)` in React) for the observer to subscribe. `unmounted()` tears it down.
 
+The observer is shared per Scope and reference-counted: every `mounted()` is one owner, and only the last matching `unmounted()` releases the observer. Several components and a feature-level `sample` can drive the same query independently — unmounting one of them doesn't stop updates for the rest. Extra `unmounted()` calls are a safe no-op.
+
 ```ts
 userQuery.mounted()
 // ...
-userQuery.unmounted() // cancels in-flight, releases observer
+userQuery.unmounted() // last owner: cancels in-flight, releases observer
 ```
 
 In React, the [`useQuery`](/effector-tanstack-query/react/use-query/) hook calls these for you.

@@ -382,10 +382,9 @@ describe('createQuery', () => {
   })
 
   it('reactive key change after a failed mount is a no-op (observer null)', async () => {
-    // mounted event flips $isMounted to true even when mountFx throws
-    // (no qc). A subsequent reactive-key change then triggers updateObserverFx
-    // with $isMounted=true but $observer=null — covers the `if (!observer)
-    // return` guard inside updateObserverFx.
+    // mountFx throws (no qc), so the failed consumer is not counted as an
+    // owner and $isMounted stays false. A subsequent reactive-key change must
+    // not reach the observer (there is none) and must not throw.
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {})
