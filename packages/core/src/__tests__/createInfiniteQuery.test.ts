@@ -1,3 +1,5 @@
+import type { Store } from 'effector'
+import type { ResolvedOptions } from '../resolve'
 import { allSettled, createEvent, createStore, fork } from 'effector'
 import { InfiniteQueryObserver, QueryClient } from '@tanstack/query-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -114,13 +116,18 @@ describe('createInfiniteQuery (core)', () => {
     })
 
     const factory = query as typeof query & {
+      __options: Store<ResolvedOptions>
       __createObserver: (
         qc: QueryClient,
-        init: { queryKey: unknown; enabled: boolean },
+        options: ResolvedOptions,
       ) => InfiniteQueryObserver
     }
 
+    const scope = fork()
+    const options = scope.getState(factory.__options)
+
     const observer = factory.__createObserver(queryClient, {
+      ...options,
       queryKey: ['inf-transient'],
       enabled: true,
     })
@@ -198,8 +205,6 @@ describe('createInfiniteQuery (core)', () => {
       Promise.resolve({ items: [`p${pageParam}`], next: null }),
     )
     // Single-arg form — no explicit qc, falls back to global $queryClient.
-    // This exercises the `parseInfiniteArgs` null-client branch as a side
-    // benefit.
     const query = createInfiniteQuery<
       { items: Array<string>; next: number | null },
       Error,

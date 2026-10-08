@@ -1,11 +1,4 @@
-import {
-  attach,
-  combine,
-  createEvent,
-  createStore,
-  sample,
-  scopeBind,
-} from 'effector'
+import { attach, createEvent, createStore, sample, scopeBind } from 'effector'
 import type { Event, EventCallable, Store } from 'effector'
 import type {
   FetchStatus,
@@ -14,8 +7,7 @@ import type {
   QueryStatus,
 } from '@tanstack/query-core'
 import { $queryClient } from './queryClient'
-import { resolveEnabled, resolveKey } from './resolve'
-import type { EffectorQueryKey, StoreOrValue } from './types'
+import type { QueryDefinition, ResolvedOptions } from './resolve'
 
 /**
  * The minimal shape of an observer that createBaseQuery knows how to drive.
@@ -41,19 +33,24 @@ export interface BaseObserverResult<TData, TError> {
   fetchStatus: FetchStatus
   isPlaceholderData: boolean
   /**
-   * Timestamp (ms) of the last successful data resolution. Monotonically
-   * increases per successful fetch — used to detect newly-finished fetches
-   * for the `finished.success` lifecycle event.
+   * Timestamp (ms) of the last successful cache data update. Advancing values
+   * in observer notifications drive `finished.success`; cache writes count
+   * too, and multiple resolutions can share one millisecond.
    */
   dataUpdatedAt: number
   /**
-   * Timestamp (ms) of the last error. Increments per failed fetch — used to
-   * detect newly-finished failures for the `finished.failure` lifecycle event.
+   * Timestamp (ms) of the last error. Advancing values in observer
+   * notifications drive `finished.failure`.
    */
   errorUpdatedAt: number
 }
 
-export interface BaseQueryStores<TData, TError, TObserver> {
+export interface BaseQueryStores<
+  TData,
+  TError,
+  TObserver,
+  TOptions extends ResolvedOptions = ResolvedOptions,
+> {
   $data: Store<TData | undefined>
   $error: Store<TError | null>
   $status: Store<QueryStatus>
@@ -79,15 +76,16 @@ export interface BaseQueryStores<TData, TError, TObserver> {
   $resolvedKey: Store<QueryKey>
   /** Internal — used by the React suspense hooks. */
   $enabled: Store<boolean>
+  $options: Store<TOptions>
   refresh: EventCallable<void>
   mounted: EventCallable<void>
   unmounted: EventCallable<void>
   /**
-   * Lifecycle events for `sample`-driven reactions to fetch completion.
-   * `success` fires with the (post-`select`) data on every newly-finished
-   * successful fetch; `failure` fires with the error on every failed fetch.
-   * Neither fires for the baseline state observed on mount (e.g. hydrated
-   * cache) — they track *new* fetches, not initial observability.
+   * Lifecycle events for observed cache updates with advancing timestamps.
+   * `success` carries post-select data; `failure` carries the error.
+   * The mount baseline and placeholder data do not emit success. Notification
+   * filters and unchanged timestamps can suppress events; these are not
+   * guaranteed once per network request.
    */
   finished: {
     success: Event<TData>
@@ -95,17 +93,8 @@ export interface BaseQueryStores<TData, TError, TObserver> {
   }
 }
 
-export interface BaseQueryOptions {
-  queryKey: EffectorQueryKey
-  enabled?: StoreOrValue<boolean>
-  /**
-   * Pre-resolved reactive `refetchInterval`. The per-flavor factory extracts
-   * the original option, and — if it's a Store — passes the Store here while
-   * stripping the value from the observer constructor options. Static values
-   * and function forms continue to flow through `restOptions` to the
-   * observer.
-   */
-  reactiveRefetchInterval?: Store<number | false | undefined>
+export interface BaseQueryOptions<TOptions extends ResolvedOptions> {
+  definition: QueryDefinition<TOptions>
   name?: string
 }
 
@@ -166,7 +155,7 @@ export interface CreateBaseQueryConfig<
   /** Build the observer for the current scope. Receives the resolved client. */
   createObserver: (
     queryClient: QueryClient,
-    initial: { queryKey: QueryKey; enabled: boolean },
+    initial: ResolvedOptions,
   ) => TObserver
   /**
    * Hook for query flavors that need additional stores/events (e.g. infinite
@@ -181,14 +170,20 @@ export function createBaseQuery<
   TResult extends BaseObserverResult<TData, TError>,
   TObserver extends BaseObserverLike<TResult>,
   TExtraStores = {},
+  TOptions extends ResolvedOptions = ResolvedOptions,
 >(
   explicitClient: QueryClient | null,
-  options: BaseQueryOptions,
-  config: CreateBaseQueryConfig<TData, TError, TResult, TObserver, TExtraStores>,
-): BaseQueryStores<TData, TError, TObserver> & TExtraStores {
-  const { name, reactiveRefetchInterval: $reactiveRefetchInterval } = options
-  const $resolvedKey = resolveKey(options.queryKey)
-  const $enabled = resolveEnabled(options.enabled)
+  options: BaseQueryOptions<TOptions>,
+  config: CreateBaseQueryConfig<
+    TData,
+    TError,
+    TResult,
+    TObserver,
+    TExtraStores
+  >,
+): BaseQueryStores<TData, TError, TObserver, TOptions> & TExtraStores {
+  const { name, definition } = options
+  const { $options, $resolvedKey, $enabled } = definition
 
   // If an explicit client is passed, the factory is locked to it. fork()
   // values cannot override the captured value because $effectiveClient is a
@@ -256,26 +251,12 @@ export function createBaseQuery<
   const extras = config.setupExtras?.()
   extras?.setupEffects?.({ $observer })
 
-  // Runs once per mount. Creates the observer for the current scope (if not
-  // yet created) and attaches the subscription. scopeBind({ safe: true })
-  // reliably captures the fork scope here because this effect is triggered
-  // directly from allSettled(mounted). Bound dispatchers are captured in the
-  // observer callback's closure and reused for all subsequent notifications
-  // (including after key/enabled changes).
+  // The first owner creates the scoped subscription. Bind dispatchers here
+  // so later observer callbacks update the same scope, including after
+  // factory options change.
   const mountFx = attach({
     source: { qc: $effectiveClient, observer: $observer },
-    effect: (
-      { qc, observer: existingObserver },
-      {
-        key,
-        enabled,
-        refetchInterval,
-      }: {
-        key: QueryKey
-        enabled: boolean
-        refetchInterval: number | false | undefined
-      },
-    ) => {
+    effect: ({ qc, observer: existingObserver }, currentOptions: TOptions) => {
       if (!qc) {
         throw new Error(
           '[@tanstack/query-effector] No QueryClient is set. Call setQueryClient(qc) before mounting, ' +
@@ -285,7 +266,7 @@ export function createBaseQuery<
 
       const observer =
         existingObserver ??
-        config.createObserver(qc, { queryKey: key, enabled })
+        config.createObserver(qc, definition.create(currentOptions))
 
       const dispatchData = scopeBind(dataUpdated, { safe: true })
       const dispatchError = scopeBind(errorUpdated, { safe: true })
@@ -303,21 +284,15 @@ export function createBaseQuery<
       // notification (the immediate getCurrentResult() emit below, or the
       // observer's first callback) establishes the baseline without firing —
       // so hydrated cache data on mount doesn't dispatch `finished.success`.
-      // Subsequent increments of dataUpdatedAt / errorUpdatedAt are genuine
-      // new fetches and do fire.
+      // Subsequent timestamp advances can emit, including cache writes.
+      // Notification filters and same-millisecond results can suppress events.
       let lastDataUpdatedAt = -1
       let lastErrorUpdatedAt = -1
 
       observerSubscriptions.get(observer)?.()
-      observer.setOptions({
-        ...observer.options,
-        queryKey: key,
-        enabled,
-        // Only override refetchInterval when the user provided a reactive
-        // Store — otherwise the static value (or function) from the observer
-        // constructor wins.
-        ...($reactiveRefetchInterval ? { refetchInterval } : {}),
-      })
+      observer.setOptions(
+        definition.update(observer.options, currentOptions, true),
+      )
 
       const dispatch = (result: TResult) => {
         dispatchData(result.data)
@@ -329,11 +304,10 @@ export function createBaseQuery<
         dispatchExtras?.(result)
 
         if (lastDataUpdatedAt === -1) {
-          // Baseline — record current timestamps without emitting.
           lastDataUpdatedAt = result.dataUpdatedAt
           lastErrorUpdatedAt = result.errorUpdatedAt
         } else {
-          // A newly-resolved successful fetch. Guard against placeholderData,
+          // An observed successful cache update. Guard against placeholderData,
           // which carries status 'success' but never advances dataUpdatedAt.
           if (
             result.dataUpdatedAt > lastDataUpdatedAt &&
@@ -368,41 +342,15 @@ export function createBaseQuery<
 
   sample({ clock: mountFx.doneData, target: observerCreated })
 
-  // Runs when key / enabled / reactive refetchInterval change after mount.
-  // Only updates observer options — subscription + dispatchers were already
-  // wired in mountFx.
+  // Factory source changes can replace callbacks without changing the key.
+  // Apply the scoped options snapshot while retaining the existing subscription.
   const updateObserverFx = attach({
     source: $observer,
-    effect: (
-      observer,
-      {
-        key,
-        enabled,
-        refetchInterval,
-      }: {
-        key: QueryKey
-        enabled: boolean
-        refetchInterval: number | false | undefined
-      },
-    ) => {
-      if (!observer) return
-      // Strip _defaulted and queryHash so defaultQueryOptions() recomputes
-      // the hash for the new key. Without this, the old hash is preserved and
-      // QueryObserver#updateQuery() finds the old query — no key switch, no fetch.
-      const {
-        _defaulted: _d,
-        queryHash: _h,
-        ...baseOptions
-      } = observer.options as typeof observer.options & {
-        _defaulted?: boolean
-        queryHash?: string
-      }
-      observer.setOptions({
-        ...baseOptions,
-        queryKey: key,
-        enabled,
-        ...($reactiveRefetchInterval ? { refetchInterval } : {}),
-      })
+    effect: (observer, currentOptions: TOptions) => {
+      if (observer)
+        observer.setOptions(
+          definition.update(observer.options, currentOptions, false),
+        )
     },
   })
 
@@ -434,29 +382,15 @@ export function createBaseQuery<
     // observer, so the next mounted() retries instead of being swallowed.
     .on(mountFx.fail, (count) => Math.max(0, count - 1))
 
-  // Combine of all reactive options that drive observer.setOptions. Built once
-  // so mountFx and updateObserverFx see the same shape. When the user didn't
-  // pass a reactive `refetchInterval`, we fall back to a static-`false` store
-  // (its emitted value is never read — the spread is guarded by the original
-  // `$reactiveRefetchInterval` reference).
-  const $observerOptions = combine({
-    key: $resolvedKey,
-    enabled: $enabled,
-    refetchInterval:
-      $reactiveRefetchInterval ??
-      createStore<number | false | undefined>(false),
-  })
-
   sample({
     clock: mountCounted,
-    source: $observerOptions,
+    source: $options,
     filter: (_, count) => count === 1,
     target: mountFx,
   })
 
   sample({
-    clock: $observerOptions,
-    source: $observerOptions,
+    clock: $options,
     filter: $isMounted,
     target: updateObserverFx,
   })
@@ -507,6 +441,7 @@ export function createBaseQuery<
     $queryClient: $effectiveClient,
     $resolvedKey,
     $enabled,
+    $options,
     refresh,
     mounted,
     unmounted,

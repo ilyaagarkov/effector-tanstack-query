@@ -28,3 +28,6 @@ pnpm-debug.log*
 .env.*.local
 
 .npmrc.local
+
+# Isolated declarations for registered-type consumer tests
+.type-tests-dist/
