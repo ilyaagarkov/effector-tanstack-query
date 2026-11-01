@@ -12,6 +12,8 @@ Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share 
 
   Tracking is per item and per field in `useQueries` / `useSuspenseQueries`. The Suspense hooks still always re-render when a query goes back to `pending` or fails, so suspending and error boundaries work whatever the component reads. Effector stores are unaffected: `query.$isFetching` and the rest still receive every update.
 
+- **Suspense hooks keep rendering data when a refetch fails** — `@effector-tanstack-query/react`. `useSuspenseQuery`, `useSuspenseInfiniteQuery` and `useSuspenseQueries` threw every query error to the error boundary, even when the query still had data. Now an error is thrown only when there is no data — `@tanstack/react-query`'s default. After a failed refetch the hook returns the data with `status: 'error'`, `isError: true` and `error` set. `UseSuspenseQueryResult` / `UseSuspenseInfiniteQueryResult` are now unions on `status` (`isError` narrows `error` to `TError`) instead of always `'success'`.
+
 - **`notifyOnChangeProps` removed from factory option types** — `@effector-tanstack-query/core`. `createQuery`, `createInfiniteQuery`, `createQueries` items, `queryOptions` and `infiniteQueryOptions` accepted it, but the observer always forced `'all'` so the model stores stay current, and the value was silently ignored. It's now a type error; set it on the React hook instead. Options objects built elsewhere (e.g. native `@tanstack/react-query` helpers) are still accepted, and the value is still ignored.
 
 ### Added

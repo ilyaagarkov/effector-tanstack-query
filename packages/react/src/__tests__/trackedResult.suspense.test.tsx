@@ -181,7 +181,9 @@ describe('useSuspenseQuery — tracked result', () => {
     expect(commits).toBeGreaterThan(0)
   })
 
-  it('still throws a refetch error to the boundary when only data is read', async () => {
+  it('re-renders a data-only consumer once when a refetch fails with data', async () => {
+    // `status` turns 'error' — the gate always re-renders for it, then lets
+    // the data through (see suspenseErrors.test).
     const q = seededQuery('suspense.tracked.error')
 
     function Consumer() {
@@ -189,7 +191,7 @@ describe('useSuspenseQuery — tracked result', () => {
       return <span>id: {data.id}</span>
     }
 
-    const { getByText } = renderCounted(
+    const { counter, getByText } = renderCounted(
       <Gate>
         <Consumer />
       </Gate>,
@@ -197,8 +199,11 @@ describe('useSuspenseQuery — tracked result', () => {
     )
     await flush()
 
-    await backgroundRefetch(q, { error: new Error('boom') })
-    getByText('boundary: boom')
+    const commits = await commitsDuring(counter, () =>
+      backgroundRefetch(q, { error: new Error('boom') }),
+    )
+    expect(commits).toBe(1)
+    getByText('id: 1')
   })
 
   it('suspends again when the query goes back to pending', async () => {

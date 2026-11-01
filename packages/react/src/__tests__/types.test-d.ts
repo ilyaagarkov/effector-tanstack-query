@@ -140,6 +140,25 @@ describe('useSuspenseQueries — family overload', () => {
   })
 })
 
+describe('UseSuspenseQueryResult — status union', () => {
+  it('narrows error on isError / status', () => {
+    function probe(result: UseSuspenseQueryResult<{ id: number }, Error>) {
+      expectTypeOf(result.data).toEqualTypeOf<{ id: number }>()
+      if (result.isError) {
+        expectTypeOf(result.error).toEqualTypeOf<Error>()
+        expectTypeOf(result.status).toEqualTypeOf<'error'>()
+      } else {
+        expectTypeOf(result.error).toEqualTypeOf<null>()
+        expectTypeOf(result.status).toEqualTypeOf<'success'>()
+      }
+      if (result.status === 'error') {
+        expectTypeOf(result.isSuccess).toEqualTypeOf<false>()
+      }
+    }
+    void probe
+  })
+})
+
 describe('useIsFetching / useIsMutating', () => {
   it('return a plain number (never number | undefined)', () => {
     expectTypeOf(useIsFetching()).toEqualTypeOf<number>()

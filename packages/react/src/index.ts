@@ -482,6 +482,8 @@ const SUSPENSE_FIELDS = [
   'data',
   'error',
   'status',
+  'isSuccess',
+  'isError',
   'isFetching',
   'isPlaceholderData',
   'fetchStatus',
@@ -497,9 +499,24 @@ const SUSPENSE_INFINITE_FIELDS = [
   'isFetchPreviousPageError',
 ] as const
 
-// Past the gate `status` is always 'success', so it isn't a result field the
-// component can track — but the gate reads it, so it always re-renders.
+// The gate reads `status` to suspend or throw, so it always re-renders —
+// whatever the component reads.
 const SUSPENSE_GATE = ['status']
+
+/**
+ * Whether the Suspense gate throws a query's error to the boundary: only
+ * when there is no data to keep showing — `@tanstack/react-query`'s
+ * default. A failed refetch with data renders on, with `status: 'error'`.
+ */
+function throwsError(result: object): boolean {
+  const { status, data } = result as { status?: unknown; data?: unknown }
+  return status === 'error' && data === undefined
+}
+
+/** Past the gate: `error` is `null` unless the query is in error. */
+function readSuspenseField(values: Row, field: string): unknown {
+  return field === 'error' ? (values.error ?? null) : values[field]
+}
 
 /**
  * Tracked rows for the suspense hooks. A row comes from its observer when
@@ -538,17 +555,8 @@ function useSuspenseRows(
   })
 }
 
-/** The result fields a suspense hook tracks; the rest are constants. */
-const SUSPENSE_TRACKED = SUSPENSE_FIELDS.filter((f) => f !== 'status')
-const SUSPENSE_INFINITE_TRACKED = SUSPENSE_INFINITE_FIELDS.filter(
-  (f) => f !== 'status',
-)
-const SUSPENSE_SUCCESS = {
-  status: 'success',
-  isPending: false,
-  isSuccess: true,
-  isError: false,
-} as const
+/** Past the gate a query is never pending. */
+const SUSPENSE_SETTLED = { isPending: false } as const
 
 type SuspenseOptions = QueryObserverOptions<any, any, any, any, any>
 interface SuspenseFactory<TObserver> {
@@ -563,24 +571,27 @@ interface SuspenseFactory<TObserver> {
   >
 }
 
-export interface UseSuspenseQueryResult<TData, TError = Error> {
-  /** Resolved query data — non-nullable inside the rendered subtree (Suspense
-   * absorbed the pending state). */
-  data: TData
-  /** Always `null` past the Suspense gate; errors are thrown to the nearest
-   * `<ErrorBoundary>`. Typed as `TError | null` for consistency with
-   * `useQuery` so the same destructure works in both. */
-  error: TError | null
-  status: 'success'
-  isPending: false
-  isSuccess: true
-  isError: false
-  /** `true` while a background refetch is running. Use for refresh spinners. */
-  isFetching: boolean
-  isPlaceholderData: boolean
-  fetchStatus: FetchStatus
-  refresh: () => void
-}
+/**
+ * Past the Suspense gate a query has data. It is either successful or its
+ * latest refetch failed — the error is thrown to the boundary only when
+ * there is no data to show. Narrow on `isError` / `status`.
+ */
+export type SuspenseResultStatus<TError> =
+  | { status: 'success'; isSuccess: true; isError: false; error: null }
+  | { status: 'error'; isSuccess: false; isError: true; error: TError }
+
+export type UseSuspenseQueryResult<TData, TError = Error> =
+  SuspenseResultStatus<TError> & {
+    /** Resolved query data — non-nullable inside the rendered subtree
+     * (Suspense absorbed the pending state). */
+    data: TData
+    isPending: false
+    /** `true` while a background refetch is running. Use for refresh spinners. */
+    isFetching: boolean
+    isPlaceholderData: boolean
+    fetchStatus: FetchStatus
+    refresh: () => void
+  }
 
 // Next's protocol for "this subtree can't render on the server, hand it to the
 // client": an Error whose `digest` is this exact string. Next's error handler
@@ -662,7 +673,7 @@ export function useSuspenseQuery<TData, TError = Error>(
   if (observer) {
     const result = observer.getOptimisticResult(observer.options as any)
 
-    if (result.status === 'error') throw result.error
+    if (throwsError(result)) throw result.error
     if (result.status === 'pending') {
       throw observer.fetchOptimistic(observer.options as any)
     }
@@ -674,7 +685,7 @@ export function useSuspenseQuery<TData, TError = Error>(
     // happened: can't deduplicate-throw a fetch promise, so surface the
     // misconfiguration as an error to `<ErrorBoundary>`.
     const state = snapshot.rows[0]!
-    if (state.status === 'error') throw state.error
+    if (throwsError(state)) throw state.error
     if (state.status === 'pending') {
       throw noQueryClientError('useSuspenseQuery')
     }
@@ -682,20 +693,17 @@ export function useSuspenseQuery<TData, TError = Error>(
   }
 
   return trackedResult(
-    SUSPENSE_TRACKED,
-    (field) => values[field],
+    SUSPENSE_FIELDS,
+    (field) => readSuspenseField(values, field),
     (field) => track(0, field),
-    { ...SUSPENSE_SUCCESS, refresh },
+    { ...SUSPENSE_SETTLED, refresh },
   )
 }
 
-export interface UseSuspenseInfiniteQueryResult<TData, TError = Error> {
+export type UseSuspenseInfiniteQueryResult<TData, TError = Error> =
+  SuspenseResultStatus<TError> & {
   data: TData
-  error: TError | null
-  status: 'success'
   isPending: false
-  isSuccess: true
-  isError: false
   isFetching: boolean
   isPlaceholderData: boolean
   fetchStatus: FetchStatus
@@ -750,7 +758,7 @@ export function useSuspenseInfiniteQuery<
     const obs = observer
     const result = obs.getOptimisticResult(obs.options as any)
 
-    if (result.status === 'error') throw result.error
+    if (throwsError(result)) throw result.error
     if (result.status === 'pending') {
       throw (
         obs as unknown as {
@@ -762,7 +770,7 @@ export function useSuspenseInfiniteQuery<
   } else {
     // Store-only path (server-RSC of a hydrated scope).
     const state = snapshot.rows[0]!
-    if (state.status === 'error') throw state.error
+    if (throwsError(state)) throw state.error
     if (state.status === 'pending') {
       throw noQueryClientError('useSuspenseInfiniteQuery')
     }
@@ -770,10 +778,10 @@ export function useSuspenseInfiniteQuery<
   }
 
   return trackedResult(
-    SUSPENSE_INFINITE_TRACKED,
-    (field) => values[field],
+    SUSPENSE_INFINITE_FIELDS,
+    (field) => readSuspenseField(values, field),
     (field) => track(0, field),
-    { ...SUSPENSE_SUCCESS, refresh, fetchNextPage, fetchPreviousPage },
+    { ...SUSPENSE_SETTLED, refresh, fetchNextPage, fetchPreviousPage },
   )
 }
 
@@ -955,12 +963,13 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
     obs ? obs.getOptimisticResult(obs.options) : null,
   )
 
-  // Errors first — first error wins.
+  // Errors without data first — first one wins. A query whose refetch failed
+  // with data renders on (see `throwsError`).
   for (let i = 0; i < queries.length; i++) {
     const live = liveResults[i]
     if (live) {
-      if (live.status === 'error') throw live.error
-    } else if (rows[i]!.status === 'error') {
+      if (throwsError(live)) throw live.error
+    } else if (throwsError(rows[i]!)) {
       throw rows[i]!.error
     }
   }
@@ -989,10 +998,10 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
   return queries.map((_, i) => {
     const values = (liveResults[i] ?? rows[i]!) as Row
     return trackedResult(
-      SUSPENSE_TRACKED,
-      (field) => (field === 'error' ? (values.error ?? null) : values[field]),
+      SUSPENSE_FIELDS,
+      (field) => readSuspenseField(values, field),
       (field) => track(i, field),
-      { ...SUSPENSE_SUCCESS, refresh: refreshes[i] },
+      { ...SUSPENSE_SETTLED, refresh: refreshes[i] },
     )
   }) as UseSuspenseQueriesTupleResult<T>
 }
@@ -1024,9 +1033,9 @@ function useSuspenseQueriesFamily<TItem, TData, TError>(
   const items = snapshot.rows as ReadonlyArray<Row & { source: TItem }>
   const qc = useUnit(family.$queryClient)
 
-  // Error wins over pending.
+  // An error without data wins over pending.
   for (const it of items) {
-    if (it.status === 'error') throw it.error
+    if (throwsError(it)) throw it.error
   }
 
   const pending = items.filter((it) => it.status === 'pending')
@@ -1044,10 +1053,10 @@ function useSuspenseQueriesFamily<TItem, TData, TError>(
 
   return items.map((it, i) =>
     trackedResult(
-      SUSPENSE_TRACKED,
-      (field) => (snapshot.rows[i] ?? it)[field],
+      SUSPENSE_FIELDS,
+      (field) => readSuspenseField(snapshot.rows[i] ?? it, field),
       (field) => track(i, field),
-      { ...SUSPENSE_SUCCESS, refresh: () => refreshOne(it.source) },
+      { ...SUSPENSE_SETTLED, refresh: () => refreshOne(it.source) },
     ),
   )
 }

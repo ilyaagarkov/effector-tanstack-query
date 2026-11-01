@@ -8,7 +8,7 @@ Suspense version of [`useQueries`](/effector-tanstack-query/react/use-queries/).
 - a **static tuple** of factories — `useSuspenseQueries([userQuery, postsQuery] as const)`
 - a **family** from [`createQueries`](/effector-tanstack-query/api/create-queries/) — `useSuspenseQueries(usersFamily)`
 
-While **any** query is pending, the hook throws an aggregated `Promise.all(...)` of every pending inflight — `<Suspense>` waits until they all settle, then re-renders. The first errored query throws its error past the gate to the nearest `<ErrorBoundary>`. On success, every result entry has `data` narrowed to non-nullable `TData`.
+While **any** query is pending, the hook throws an aggregated `Promise.all(...)` of every pending inflight — `<Suspense>` waits until they all settle, then re-renders. The first query that failed **without data** throws its error to the nearest `<ErrorBoundary>`; a query whose refetch failed keeps its data and reports `isError` / `error` in its entry, as in [`useSuspenseQuery`](/effector-tanstack-query/react/use-suspense-query/#behavior). Every result entry has `data` narrowed to non-nullable `TData`.
 
 ## Static tuple
 

@@ -113,7 +113,6 @@ The default matches: fields are tracked on first read, the set only grows, and c
 | Global default | Yes, via `defaultOptions` | No — per hook call |
 | `useMutation` | Re-renders on every change | Tracked, like the query hooks |
 | What is filtered | The observer skips notifying its listeners | Only React re-renders; effector stores get every update |
-| Suspense hooks on a refetch error with data | Keep rendering the data (throw only without data) | Throw to the error boundary |
 | Reading a field in a handler | The render's value | The current value, until a tracked field changes and the component re-renders |
 | Result fields | ~25 (`dataUpdatedAt`, `isStale`, `refetch`, …) | The fields listed on each hook's page |
 

@@ -6,8 +6,20 @@ description: Throw promises and errors into React's Suspense and ErrorBoundary.
 `useSuspenseQuery` and `useSuspenseInfiniteQuery` integrate with React `<Suspense>` and error boundaries:
 
 - While pending → throws an inflight promise (deduplicated by `queryClient.fetchQuery`)
-- On error → throws the error (catch with `<ErrorBoundary>`)
-- On success → returns the **same shape as `useQuery`** (`{ data, error, isFetching, refresh, … }`), with `data` narrowed to non-nullable `TData` because the pending state can't reach the rendered subtree.
+- On error **without data** → throws the error (catch with `<ErrorBoundary>`)
+- Otherwise → returns the **same shape as `useQuery`** (`{ data, error, isFetching, refresh, … }`), with `data` narrowed to non-nullable `TData` because the pending state can't reach the rendered subtree.
+
+A failed **refetch** doesn't throw: the data is still there, so the component keeps rendering it, with `status: 'error'`, `isError: true` and `error` set until a later fetch succeeds — the default of `@tanstack/react-query`'s Suspense hooks. Show it inline if you need to:
+
+```tsx
+const result = useSuspenseQuery(userQuery)
+return (
+  <>
+    {result.isError && <Banner>Couldn't refresh: {result.error.message}</Banner>}
+    <UserCard user={result.data} />
+  </>
+)
+```
 
 ## Usage
 

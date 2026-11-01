@@ -1,6 +1,6 @@
 ---
 title: useSuspenseQuery
-description: Suspense-friendly hook that throws the inflight promise during pending and the error during failure.
+description: Suspense-friendly hook that throws the inflight promise while pending and the error when a query fails without data.
 ---
 
 ```ts
@@ -32,22 +32,23 @@ Wrap with `<Suspense>` and `<ErrorBoundary>`:
 ## Behavior
 
 - `'pending'` → throws `observer.fetchOptimistic(observer.options)` — a promise deduplicated by `queryHash`.
-- `'error'` → throws the error (caught by ErrorBoundary).
+- `'error'` without data → throws the error (caught by ErrorBoundary).
+- `'error'` with data (a failed refetch) → returns the data with `status: 'error'`, `isError: true` and `error` set.
 - `'success'` → returns the result object with `data: TData` (non-nullable).
 - Cache hit → returns immediately, doesn't suspend.
 
-The hook returns the **same shape as `useQuery`**, but with the static guarantees of the Suspense gate baked into the types — `data` can't be `undefined`, `isPending` is always `false`, `isError` is always `false`.
+The hook returns the **same shape as `useQuery`**, but with the static guarantees of the Suspense gate baked into the types — `data` can't be `undefined` and `isPending` is always `false`. The result is a union on `status`: narrow on `isError` (or `status === 'error'`) to read `error` as `TError`; otherwise it's `null`.
 
 ## Return value
 
 | Field               | Type                                       | Description                                  |
 | ------------------- | ------------------------------------------ | -------------------------------------------- |
 | `data`              | `TData`                                    | Non-nullable                                 |
-| `error`             | `TError \| null`                           | Always `null` past the Suspense gate         |
-| `status`            | `'success'`                                |                                              |
+| `error`             | `TError \| null`                           | Set after a failed refetch, otherwise `null` |
+| `status`            | `'success' \| 'error'`                     | `'error'` after a failed refetch             |
 | `isPending`         | `false`                                    |                                              |
-| `isSuccess`         | `true`                                     |                                              |
-| `isError`           | `false`                                    |                                              |
+| `isSuccess`         | `boolean`                                  |                                              |
+| `isError`           | `boolean`                                  | Narrows `error` to `TError`                  |
 | `isFetching`        | `boolean`                                  | `true` during background refetch             |
 | `isPlaceholderData` | `boolean`                                  |                                              |
 | `fetchStatus`       | `'fetching' \| 'paused' \| 'idle'`         |                                              |
