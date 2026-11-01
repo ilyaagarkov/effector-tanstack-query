@@ -112,8 +112,15 @@ Only `name`, `enabled` and `refetchInterval` are allowed alongside `source` and
 `query`. `enabled` accepts a boolean or boolean store; `refetchInterval` accepts
 the native value/callback or a `Store<number | false | undefined>`. A defined
 top-level value overrides the factory; `undefined` inherits, while `false` and
-`0` override. Factory `enabled` must resolve to a boolean; a native callback
-requires a boolean top-level override. Use `combine` for derived conditions.
+`0` override. The factory may return `enabled` as a boolean or as TanStack's
+`(query) => boolean` callback; a callback is evaluated against the cached query,
+including when `prefetch` decides whether to fetch.
+
+If `query` throws, the exception becomes the query's error for those source
+values: `$status` is `'error'`, `$error` holds the exception, `$data` is
+cleared and `finished.failure` fires. `prefetch` fails with the same error,
+and Suspense hooks throw it to the nearest error boundary. When the source
+changes to values the factory accepts, the query resumes.
 
 Put `select`, `staleTime`, `placeholderData` and other TanStack options inside
 the factory. If composition loses a callback's inferred type, annotate the

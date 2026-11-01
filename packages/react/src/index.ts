@@ -434,7 +434,11 @@ interface SuspenseFactory<TObserver> {
     qc: QueryClient,
     options: SuspenseOptions,
   ): TObserver
-  __options: Store<SuspenseOptions>
+  /** Current options, or the exception thrown by a factory's `query`. */
+  __state: Store<
+    | { options: SuspenseOptions; failure: null }
+    | { options: null; failure: { error: unknown } }
+  >
 }
 
 export interface UseSuspenseQueryResult<TData, TError = Error> {
@@ -755,14 +759,18 @@ function useSuspenseObserver<
   const factory = query as unknown as TQuery & SuspenseFactory<TObserver>
   const observerInScope = useUnit(query.$observer) as TObserver | null
   const qc = useUnit(query.$queryClient)
-  const options = useUnit(factory.__options)
+  const state = useUnit(factory.__state)
 
   // Effects cannot update a transient while rendering is suspended.
   // Recreate it from the current scoped options when that snapshot changes.
   const transient = React.useMemo(() => {
-    if (observerInScope || !qc) return null
-    return factory.__createObserver(qc, options)
-  }, [observerInScope, qc, factory, options])
+    if (observerInScope || !qc || state.failure) return null
+    return factory.__createObserver(qc, state.options)
+  }, [observerInScope, qc, factory, state])
+
+  // A factory that threw for the current parameters fails the render for the
+  // error boundary, like a throwing options factory does in react-query.
+  if (state.failure) throw state.failure.error
 
   // Null is a legitimate return: server-RSC render of a scope built from
   // `serialize(scope)` has neither `$observer` nor `$queryClient` (both are
@@ -830,22 +838,27 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
 
   const observersInScope = useUnit(queries.map((q) => q.$observer))
   const qcs = useUnit(queries.map((q) => q.$queryClient))
-  const resolvedOptions = useUnit(
-    queries.map((q) => (q as unknown as SuspenseFactory<unknown>).__options),
+  const states = useUnit(
+    queries.map((q) => (q as unknown as SuspenseFactory<unknown>).__state),
   )
   // Keep hook count fixed; each transient uses its model's scoped options.
   const transients = React.useMemo(() => {
     return queries.map((q, i) => {
       if (observersInScope[i]) return null
       const qc = qcs[i]
-      if (!qc) return null
+      const state = states[i]!
+      if (!qc || state.failure) return null
       return (q as unknown as SuspenseFactory<any>).__createObserver(
         qc,
-        resolvedOptions[i]!,
+        state.options,
       )
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queries, ...observersInScope, ...qcs, ...resolvedOptions])
+  }, [queries, ...observersInScope, ...qcs, ...states])
+
+  // See useSuspenseObserver: a factory exception goes to the error boundary.
+  const failed = states.find((state) => state.failure !== null)
+  if (failed?.failure) throw failed.failure.error
 
   type SuspendableObserver = {
     options: { queryKey: unknown }

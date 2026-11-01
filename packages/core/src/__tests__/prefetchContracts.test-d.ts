@@ -18,7 +18,7 @@ const definition = resolveQueryDefinition<Native>({
     select: (data) => String(data.pages.length),
   }),
 })
-const options = definition.prefetch(definition.$options.getState())
+const options = definition.prefetch(definition.$options.getState()!)
 expectTypeOf(options.initialPageParam).toEqualTypeOf<number>()
 const fetched = client.fetchInfiniteQuery(options)
 expectTypeOf(fetched).toEqualTypeOf<Promise<InfiniteData<Page, number>>>()
@@ -61,12 +61,12 @@ const inline = resolveQueryDefinition<Native>({
   refetchInterval: createStore<number | false | undefined>(false),
 })
 expectTypeOf(
-  client.fetchInfiniteQuery(inline.prefetch(inline.$options.getState())),
+  client.fetchInfiniteQuery(inline.prefetch(inline.$options.getState()!)),
 ).toEqualTypeOf<Promise<InfiniteData<Page, number>>>()
 const finite = resolveQueryDefinition({
   queryKey: ['finite'],
   queryFn: () => 1,
 })
-client.fetchQuery(finite.prefetch(finite.$options.getState()))
+client.fetchQuery(finite.prefetch(finite.$options.getState()!))
 // @ts-expect-error a finite definition does not promise infinite page options
-client.fetchInfiniteQuery(finite.prefetch(finite.$options.getState()))
+client.fetchInfiniteQuery(finite.prefetch(finite.$options.getState()!))

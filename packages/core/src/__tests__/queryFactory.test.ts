@@ -217,24 +217,35 @@ describe('createQuery factory form', () => {
     expect(queryFn).not.toHaveBeenCalled()
   })
 
-  it('rejects an actual enabled callback unless overridden with a boolean', async () => {
-    const factory = () =>
+  it('evaluates an enabled callback like TanStack, unless overridden with a boolean', async () => {
+    const queryFn = vi.fn(() => 1)
+    const factory = (enabled: boolean) => () =>
       queryOptions({
-        queryKey: ['callback'],
-        queryFn: () => 1,
-        enabled: () => true,
+        queryKey: ['callback', enabled],
+        queryFn,
+        // The callback receives the cached query, as in react-query.
+        enabled: (query) => enabled && query.queryKey[1] === enabled,
       })
-    expect(() => createQuery(client, { source: {}, query: factory })).toThrow(
-      'Use combine',
-    )
-    const query = createQuery(client, {
+    const disabled = createQuery(client, { source: {}, query: factory(false) })
+    const enabled = createQuery(client, { source: {}, query: factory(true) })
+    const overridden = createQuery(client, {
       source: {},
-      query: factory,
+      query: factory(false),
       enabled: true,
     })
     const scope = fork()
-    await allSettled(query.prefetch, { scope })
-    expect(client.getQueryData(['callback'])).toBe(1)
+
+    await allSettled(disabled.prefetch, { scope })
+    await allSettled(disabled.mounted, { scope })
+    expect(queryFn).not.toHaveBeenCalled()
+    expect(scope.getState(disabled.$fetchStatus)).toBe('idle')
+
+    await allSettled(enabled.prefetch, { scope })
+    expect(client.getQueryData(['callback', true])).toBe(1)
+
+    await allSettled(overridden.prefetch, { scope })
+    expect(client.getQueryData(['callback', false])).toBe(1)
+    expect(queryFn).toHaveBeenCalledTimes(2)
   })
 
   it('resolves a disabled factory and handles skipToken without fetching', async () => {

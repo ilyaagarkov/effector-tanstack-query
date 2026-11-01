@@ -2,7 +2,11 @@ import { attach, createEvent, sample } from 'effector'
 import { QueryObserver } from '@tanstack/query-core'
 import type { QueryClient, QueryKey, DefaultError } from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
-import { resolveQueryArguments, resolveQueryDefinition } from './resolve'
+import {
+  isEnabledFor,
+  resolveQueryArguments,
+  resolveQueryDefinition,
+} from './resolve'
 import type { ResolvedOptions } from './resolve'
 import type {
   CreateQueryOptions,
@@ -78,11 +82,15 @@ export function createQuery<
   const prefetchFx = attach({
     source: {
       qc: base.$queryClient,
-      options: base.$options,
+      state: base.$state,
     },
-    effect: ({ qc, options }) => {
-      if (!qc || !options.enabled) return
-      return qc.fetchQuery(definition.prefetch(options))
+    effect: ({ qc, state }) => {
+      if (!qc) return
+      // A factory that threw has no options to fetch: fail this prefetch
+      // with its error instead of skipping silently.
+      if (state.failure) throw state.failure.error
+      if (!isEnabledFor(qc, state.options)) return
+      return qc.fetchQuery(definition.prefetch(state.options))
     },
   })
   sample({ clock: prefetch, target: prefetchFx })
@@ -128,6 +136,11 @@ export function createQuery<
   Object.defineProperty(result, '__options', {
     enumerable: false,
     value: base.$options,
+  })
+  // Internal: options or the factory failure, so Suspense can throw it.
+  Object.defineProperty(result, '__state', {
+    enumerable: false,
+    value: base.$state,
   })
 
   return result

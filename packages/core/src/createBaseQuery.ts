@@ -7,7 +7,12 @@ import type {
   QueryStatus,
 } from '@tanstack/query-core'
 import { $queryClient } from './queryClient'
-import type { QueryDefinition, ResolvedOptions } from './resolve'
+import type {
+  FactoryFailure,
+  QueryDefinition,
+  QueryState,
+  ResolvedOptions,
+} from './resolve'
 
 /**
  * The minimal shape of an observer that createBaseQuery knows how to drive.
@@ -72,11 +77,14 @@ export interface BaseQueryStores<
    * `$queryClient`, which honors `fork({ values })` overrides.
    */
   $queryClient: Store<QueryClient | null>
-  /** Internal — used by the React suspense hooks. */
-  $resolvedKey: Store<QueryKey>
-  /** Internal — used by the React suspense hooks. */
+  /** Internal — current key; `null` while a factory fails. */
+  $resolvedKey: Store<QueryKey | null>
+  /** Internal — whether the current options are not explicitly disabled. */
   $enabled: Store<boolean>
-  $options: Store<TOptions>
+  /** Internal — current options; `null` while a factory fails. */
+  $options: Store<TOptions | null>
+  /** Internal — options or the factory failure. */
+  $state: Store<QueryState<TOptions>>
   refresh: EventCallable<void>
   mounted: EventCallable<void>
   unmounted: EventCallable<void>
@@ -142,7 +150,14 @@ export interface ExtrasSetup<TResult, TObserver, TExtraStores> {
    * per-scope `$observer` store so the flavor can build attach-based
    * effects that resolve the observer from the current scope.
    */
-  setupEffects?: (params: { $observer: Store<TObserver | null> }) => void
+  setupEffects?: (params: {
+    $observer: Store<TObserver | null>
+    /**
+     * Fires when a factory throws instead of returning options. The query
+     * is put into an error state; flavors reset their extra stores here.
+     */
+    factoryFailed: Event<FactoryFailure>
+  }) => void
 }
 
 export interface CreateBaseQueryConfig<
@@ -183,7 +198,7 @@ export function createBaseQuery<
   >,
 ): BaseQueryStores<TData, TError, TObserver, TOptions> & TExtraStores {
   const { name, definition } = options
-  const { $options, $resolvedKey, $enabled } = definition
+  const { $state, $options, $resolvedKey, $enabled } = definition
 
   // If an explicit client is passed, the factory is locked to it. fork()
   // values cannot override the captured value because $effectiveClient is a
@@ -248,99 +263,111 @@ export function createBaseQuery<
   // a scope that was discarded without unmount) are GC'able.
   const observerSubscriptions = new WeakMap<TObserver, () => void>()
 
+  const factoryFailed = createEvent<FactoryFailure>()
+
   const extras = config.setupExtras?.()
-  extras?.setupEffects?.({ $observer })
+  extras?.setupEffects?.({ $observer, factoryFailed })
 
   // The first owner creates the scoped subscription. Bind dispatchers here
   // so later observer callbacks update the same scope, including after
   // factory options change.
-  const mountFx = attach({
-    source: { qc: $effectiveClient, observer: $observer },
-    effect: ({ qc, observer: existingObserver }, currentOptions: TOptions) => {
-      if (!qc) {
-        throw new Error(
-          '[@tanstack/query-effector] No QueryClient is set. Call setQueryClient(qc) before mounting, ' +
-            'pass it to fork({ values: [[$queryClient, qc]] }), or pass it explicitly to the factory.',
-        )
-      }
-
-      const observer =
-        existingObserver ??
-        config.createObserver(qc, definition.create(currentOptions))
-
-      const dispatchData = scopeBind(dataUpdated, { safe: true })
-      const dispatchError = scopeBind(errorUpdated, { safe: true })
-      const dispatchStatus = scopeBind(statusUpdated, { safe: true })
-      const dispatchIsFetching = scopeBind(isFetchingUpdated, { safe: true })
-      const dispatchFetchStatus = scopeBind(fetchStatusUpdated, { safe: true })
-      const dispatchIsPlaceholderData = scopeBind(isPlaceholderDataUpdated, {
-        safe: true,
-      })
-      const dispatchFinishedSuccess = scopeBind(finishedSuccess, { safe: true })
-      const dispatchFinishedFailure = scopeBind(finishedFailure, { safe: true })
-      const dispatchExtras = extras?.bindDispatcher()
-
-      // Per-mount, per-scope baseline for lifecycle events. The first
-      // notification (the immediate getCurrentResult() emit below, or the
-      // observer's first callback) establishes the baseline without firing —
-      // so hydrated cache data on mount doesn't dispatch `finished.success`.
-      // Subsequent timestamp advances can emit, including cache writes.
-      // Notification filters and same-millisecond results can suppress events.
-      let lastDataUpdatedAt = -1
-      let lastErrorUpdatedAt = -1
-
-      observerSubscriptions.get(observer)?.()
-      observer.setOptions(
-        definition.update(observer.options, currentOptions, true),
+  const subscribeObserver = (
+    {
+      qc,
+      observer: existingObserver,
+    }: { qc: QueryClient | null; observer: TObserver | null },
+    currentOptions: TOptions,
+  ): TObserver => {
+    if (!qc) {
+      throw new Error(
+        '[@tanstack/query-effector] No QueryClient is set. Call setQueryClient(qc) before mounting, ' +
+          'pass it to fork({ values: [[$queryClient, qc]] }), or pass it explicitly to the factory.',
       )
+    }
 
-      const dispatch = (result: TResult) => {
-        dispatchData(result.data)
-        dispatchError(result.error)
-        dispatchStatus(result.status)
-        dispatchIsFetching(result.isFetching)
-        dispatchFetchStatus(result.fetchStatus)
-        dispatchIsPlaceholderData(result.isPlaceholderData)
-        dispatchExtras?.(result)
+    const observer =
+      existingObserver ??
+      config.createObserver(qc, definition.create(currentOptions))
 
-        if (lastDataUpdatedAt === -1) {
+    const dispatchData = scopeBind(dataUpdated, { safe: true })
+    const dispatchError = scopeBind(errorUpdated, { safe: true })
+    const dispatchStatus = scopeBind(statusUpdated, { safe: true })
+    const dispatchIsFetching = scopeBind(isFetchingUpdated, { safe: true })
+    const dispatchFetchStatus = scopeBind(fetchStatusUpdated, { safe: true })
+    const dispatchIsPlaceholderData = scopeBind(isPlaceholderDataUpdated, {
+      safe: true,
+    })
+    const dispatchFinishedSuccess = scopeBind(finishedSuccess, { safe: true })
+    const dispatchFinishedFailure = scopeBind(finishedFailure, { safe: true })
+    const dispatchExtras = extras?.bindDispatcher()
+
+    // Per-mount, per-scope baseline for lifecycle events. The first
+    // notification (the immediate getCurrentResult() emit below, or the
+    // observer's first callback) establishes the baseline without firing —
+    // so hydrated cache data on mount doesn't dispatch `finished.success`.
+    // Subsequent timestamp advances can emit, including cache writes.
+    // Notification filters and same-millisecond results can suppress events.
+    let lastDataUpdatedAt = -1
+    let lastErrorUpdatedAt = -1
+
+    observerSubscriptions.get(observer)?.()
+    observer.setOptions(
+      definition.update(observer.options, currentOptions, true),
+    )
+
+    const dispatch = (result: TResult) => {
+      dispatchData(result.data)
+      dispatchError(result.error)
+      dispatchStatus(result.status)
+      dispatchIsFetching(result.isFetching)
+      dispatchFetchStatus(result.fetchStatus)
+      dispatchIsPlaceholderData(result.isPlaceholderData)
+      dispatchExtras?.(result)
+
+      if (lastDataUpdatedAt === -1) {
+        lastDataUpdatedAt = result.dataUpdatedAt
+        lastErrorUpdatedAt = result.errorUpdatedAt
+      } else {
+        // An observed successful cache update. Guard against placeholderData,
+        // which carries status 'success' but never advances dataUpdatedAt.
+        if (
+          result.dataUpdatedAt > lastDataUpdatedAt &&
+          result.status === 'success' &&
+          !result.isPlaceholderData
+        ) {
           lastDataUpdatedAt = result.dataUpdatedAt
+          dispatchFinishedSuccess(result.data as TData)
+        }
+        if (
+          result.errorUpdatedAt > lastErrorUpdatedAt &&
+          result.status === 'error'
+        ) {
           lastErrorUpdatedAt = result.errorUpdatedAt
-        } else {
-          // An observed successful cache update. Guard against placeholderData,
-          // which carries status 'success' but never advances dataUpdatedAt.
-          if (
-            result.dataUpdatedAt > lastDataUpdatedAt &&
-            result.status === 'success' &&
-            !result.isPlaceholderData
-          ) {
-            lastDataUpdatedAt = result.dataUpdatedAt
-            dispatchFinishedSuccess(result.data as TData)
-          }
-          if (
-            result.errorUpdatedAt > lastErrorUpdatedAt &&
-            result.status === 'error'
-          ) {
-            lastErrorUpdatedAt = result.errorUpdatedAt
-            dispatchFinishedFailure(result.error as TError)
-          }
+          dispatchFinishedFailure(result.error as TError)
         }
       }
+    }
 
-      const unsubscribe = observer.subscribe(dispatch)
-      observerSubscriptions.set(observer, unsubscribe)
+    const unsubscribe = observer.subscribe(dispatch)
+    observerSubscriptions.set(observer, unsubscribe)
 
-      // Emit the current state immediately — observer.subscribe() may not
-      // fire the callback synchronously when cached data already matches
-      // the observer's initial result (e.g. staleTime + setQueryData).
-      // This mirrors react-query's getOptimisticResult() on mount.
-      dispatch(observer.getCurrentResult())
+    // Emit the current state immediately — observer.subscribe() may not
+    // fire the callback synchronously when cached data already matches
+    // the observer's initial result (e.g. staleTime + setQueryData).
+    // This mirrors react-query's getOptimisticResult() on mount.
+    dispatch(observer.getCurrentResult())
 
-      return observer
-    },
-  })
+    return observer
+  }
+
+  const observerSource = { qc: $effectiveClient, observer: $observer }
+  const mountFx = attach({ source: observerSource, effect: subscribeObserver })
+  // Recreates the observer when a failing factory recovers while mounted.
+  // Separate from mountFx so its failure does not change the ref-count.
+  const resumeFx = attach({ source: observerSource, effect: subscribeObserver })
 
   sample({ clock: mountFx.doneData, target: observerCreated })
+  sample({ clock: resumeFx.doneData, target: observerCreated })
 
   // Factory source changes can replace callbacks without changing the key.
   // Apply the scoped options snapshot while retaining the existing subscription.
@@ -382,17 +409,51 @@ export function createBaseQuery<
     // observer, so the next mounted() retries instead of being swallowed.
     .on(mountFx.fail, (count) => Math.max(0, count - 1))
 
-  sample({
+  // The first owner subscribes with the current options, or reports why the
+  // factory could not produce them.
+  const firstMount = sample({
     clock: mountCounted,
-    source: $options,
+    source: $state,
     filter: (_, count) => count === 1,
+  })
+  sample({
+    clock: firstMount,
+    filter: (state) => state.failure === null,
+    fn: (state) => state.options as TOptions,
     target: mountFx,
   })
-
   sample({
-    clock: $options,
+    clock: firstMount,
+    filter: (state) => state.failure !== null,
+    fn: (state) => state.failure as FactoryFailure,
+    target: factoryFailed,
+  })
+
+  // Options changed while mounted: update the observer, recreate it after a
+  // factory failure, or report a new failure.
+  const stateChanged = sample({
+    clock: $state,
+    source: $observer,
     filter: $isMounted,
+    fn: (observer, state) => ({ observer, state }),
+  })
+  sample({
+    clock: stateChanged,
+    filter: ({ observer, state }) => state.failure === null && !!observer,
+    fn: ({ state }) => state.options as TOptions,
     target: updateObserverFx,
+  })
+  sample({
+    clock: stateChanged,
+    filter: ({ observer, state }) => state.failure === null && !observer,
+    fn: ({ state }) => state.options as TOptions,
+    target: resumeFx,
+  })
+  sample({
+    clock: stateChanged,
+    filter: ({ state }) => state.failure !== null,
+    fn: ({ state }) => state.failure as FactoryFailure,
+    target: factoryFailed,
   })
 
   // Single effect: tear down subscription + destroy + clear $observer.
@@ -417,11 +478,30 @@ export function createBaseQuery<
   })
   sample({ clock: unmountFx.finally, target: observerDestroyed })
 
+  // A factory exception is the query's error for these parameters, matching
+  // a render-time throw in react-query. The observer of the previous options
+  // is released so it cannot overwrite this state; data for other
+  // parameters is not shown.
+  sample({ clock: factoryFailed, target: unmountFx })
+  $data.on(factoryFailed, () => undefined)
+  $error.on(factoryFailed, (_, { error }) => error as TError)
+  $status.on(factoryFailed, () => 'error')
+  $isFetching.on(factoryFailed, () => false)
+  $fetchStatus.on(factoryFailed, () => 'idle')
+  $isPlaceholderData.on(factoryFailed, () => false)
+  sample({
+    clock: factoryFailed,
+    fn: ({ error }) => error as TError,
+    target: finishedFailure,
+  })
+
   const refresh = createEvent<void>()
   const refreshFx = attach({
     source: { qc: $effectiveClient, key: $resolvedKey },
     effect: ({ qc, key }) => {
-      if (!qc) return
+      // Without a key (failing factory) there is nothing to invalidate;
+      // invalidateQueries without a key would target the whole cache.
+      if (!qc || !key) return
       return qc.invalidateQueries({ queryKey: key })
     },
   })
@@ -442,6 +522,7 @@ export function createBaseQuery<
     $resolvedKey,
     $enabled,
     $options,
+    $state,
     refresh,
     mounted,
     unmounted,
