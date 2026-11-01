@@ -58,11 +58,14 @@ The hook returns the **same shape as `useQuery`**, but with the static guarantee
 ```ts
 function useSuspenseQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
+  options?: { notifyOnChangeProps?: 'tracked' | 'all' }, // default: 'tracked'
 ): UseSuspenseQueryResult<TData, TError>
 ```
 
 ## Subscription
 
-The hook subscribes to observer notifications via a forced re-render (so background refetches refresh the UI) AND calls `query.mounted()` / `query.unmounted()` for compatibility with concurrent `useQuery` consumers reading the same query through scope.
+The hook subscribes to observer notifications (so background refetches refresh the UI) AND calls `query.mounted()` / `query.unmounted()` for compatibility with concurrent `useQuery` consumers reading the same query through scope.
+
+Past the gate it re-renders only when a field the component read changes — a component that reads only `data` doesn't re-render while a background refetch runs. Going back to `pending` or failing always re-renders, so the hook can suspend again or throw. Pass `{ notifyOnChangeProps: 'all' }` to re-render on every field. See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
 
 See the [Suspense guide](/effector-tanstack-query/guides/suspense/) for details.

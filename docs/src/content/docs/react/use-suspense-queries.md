@@ -44,6 +44,10 @@ function UserList() {
 }
 ```
 
+## Re-renders
+
+Past the gate, tracking is per item and per field, as in [`useQueries`](/effector-tanstack-query/react/use-queries/#re-renders). Any query going back to `pending` or failing always re-renders — even one whose fields the component never reads — so the hook can suspend again or throw. Pass `{ notifyOnChangeProps: 'all' }` as the second argument to re-render on every field. See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
+
 ## SSR
 
 The hook reads from effector stores when no observer can be materialised (the RSC server pass: `$observer` and `$queryClient` are `serialize: 'ignore'`). If `prefetchQueries(...)` populated the source items beforehand, the server pass renders with data — no Suspense fallback in the SSR HTML.

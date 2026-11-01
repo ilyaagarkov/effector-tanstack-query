@@ -51,6 +51,18 @@ Returns one `UseQueryResult` per `source` item in source order. Each item's `ref
 
 The hook handles `family.mounted()` / `unmounted()` via a single `useEffect`. Multiple components consuming the same family share the underlying observers — only the last unmount tears them down.
 
+## Re-renders
+
+Tracking is per item and per field: reading `user.data` re-renders the component on the user query's data only — not on its `isFetching`, and not on anything in `posts` or `settings`. A family source adding or removing items always re-renders.
+
+Pass `{ notifyOnChangeProps: 'all' }` as the second argument to re-render on every field of every item:
+
+```tsx
+const items = useQueries(usersFamily, { notifyOnChangeProps: 'all' })
+```
+
+See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
+
 ## When to choose which
 
 - **Tuple**: the queries are different — different `queryFn`, different shape, fixed set. Bundle them in a `[user, posts, settings]` literal.

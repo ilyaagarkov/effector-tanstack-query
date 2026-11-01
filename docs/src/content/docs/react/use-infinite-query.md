@@ -45,11 +45,14 @@ function Feed() {
 
 Same lifecycle pattern as `useQuery` — auto `mounted` / `unmounted`. Returns bound `fetchNextPage` / `fetchPreviousPage` / `refresh`.
 
+Re-renders only when a field the component read changes: a component that reads only `hasNextPage` doesn't re-render while the next page loads. Pass `{ notifyOnChangeProps: 'all' }` to re-render on every field. See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
+
 ## Type signature
 
 ```ts
 function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
+  options?: { notifyOnChangeProps?: 'tracked' | 'all' }, // default: 'tracked'
 ): UseInfiniteQueryResult<TData, TError>
 ```
 

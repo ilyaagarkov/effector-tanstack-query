@@ -44,6 +44,8 @@ function createInfiniteQuery<
 | `name`                 | `string` (recommended)                                | Stable name for SID-based SSR          |
 | ...rest                | All other `InfiniteQueryObserverOptions`              | `select`, `staleTime`, `placeholderData`, ... |
 
+As with `createQuery`, `notifyOnChangeProps` is set on the React hook, not here — see [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
+
 ## Factory form
 
 Use an infinite options factory with reactive parameters:

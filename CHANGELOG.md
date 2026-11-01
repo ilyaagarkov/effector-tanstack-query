@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share this changelog. Per-release version numbers below indicate which package shipped which change; entries for a single package mention the other staying at its previous version.
 
+## [Unreleased]
+
+### Breaking
+
+- **Result hooks re-render only for the fields a component reads** ([#27](https://github.com/ilyaagarkov/effector-tanstack-query/issues/27)) — `@effector-tanstack-query/react`. `useQuery`, `useQueries`, `useInfiniteQuery`, `useMutation`, `useSuspenseQuery`, `useSuspenseQueries` and `useSuspenseInfiniteQuery` used to subscribe to every result store, so a component reading only `data` re-rendered twice on each background refetch (`isFetching` on, then off). They now track the fields read and skip the rest, matching the default of `@tanstack/react-query`.
+
+  Tracking is per item and per field in `useQueries` / `useSuspenseQueries`. The Suspense hooks still always re-render when a query goes back to `pending` or fails, so suspending and error boundaries work whatever the component reads. Effector stores are unaffected: `query.$isFetching` and the rest still receive every update.
+
+- **`notifyOnChangeProps` removed from factory option types** — `@effector-tanstack-query/core`. `createQuery`, `createInfiniteQuery`, `createQueries` items, `queryOptions` and `infiniteQueryOptions` accepted it, but the observer always forced `'all'` so the model stores stay current, and the value was silently ignored. It's now a type error; set it on the React hook instead. Options objects built elsewhere (e.g. native `@tanstack/react-query` helpers) are still accepted, and the value is still ignored.
+
+### Added
+
+- **`notifyOnChangeProps` option** on every result hook: `'tracked'` (default) or `'all'` to re-render on every field, as in 1.x. Exported types: `NotifyOnChangeProps`, `ResultHookOptions`.
+
+### Migrating
+
+Most components need no change — they read their fields during render and simply re-render less. Check code that relies on a re-render for a field it doesn't read during render:
+
+- **Fields read only in effects, refs or callbacks.** A field is tracked once it's read, but a change to a field that was never read doesn't re-render. Read it during render (e.g. as an effect dependency: `const { isError } = useQuery(q)`; `useEffect(..., [isError])`), move the reaction to the model (`sample({ clock: q.finished.failure, ... })`), or pass `{ notifyOnChangeProps: 'all' }`.
+- **Render-count assertions** in tests (Profiler, `renderHook`) see fewer renders.
+
+Spreading the result (`{...result}`, object rest), `JSON.stringify(result)`, `console.log(result)` and React DevTools read every field, so those components keep re-rendering on all of them. See [Re-renders and tracked results](https://ilyaagarkov.github.io/effector-tanstack-query/guides/render-tracking/).
+
 ## [1.0.0] — 2026-08-07
 
 Stable 1.0. The public API is unchanged from `1.0.0-rc.1`; this release publishes it under the `latest` dist-tag.
