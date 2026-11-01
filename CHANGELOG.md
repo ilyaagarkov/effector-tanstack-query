@@ -24,10 +24,10 @@ Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share 
 
 Most components need no change — they read their fields during render and simply re-render less. Check code that relies on a re-render for a field it doesn't read during render:
 
-- **Fields read only in effects, refs or callbacks.** A field is tracked once it's read, but a change to a field that was never read doesn't re-render. Read it during render (e.g. as an effect dependency: `const { isError } = useQuery(q)`; `useEffect(..., [isError])`), move the reaction to the model (`sample({ clock: q.finished.failure, ... })`), or pass `{ notifyOnChangeProps: 'all' }`.
+- **Effects without a dependency list** used as "on any query change" — they ran after each refetch (`isFetching` flipped twice) and now run only when a read field changes. Subscribe to the field (`useEffect(..., [isFetching])`), move the reaction to the model (`sample({ clock: q.finished.success, ... })`), or pass `{ notifyOnChangeProps: 'all' }`.
 - **Render-count assertions** in tests (Profiler, `renderHook`) see fewer renders.
 
-Spreading the result (`{...result}`, object rest), `JSON.stringify(result)`, `console.log(result)` and React DevTools read every field, so those components keep re-rendering on all of them. See [Re-renders and tracked results](https://ilyaagarkov.github.io/effector-tanstack-query/guides/render-tracking/).
+Reads in handlers and effects keep working: a field read there returns its current value and is tracked from then on. Spreading the result (`{...result}`, object rest) and `JSON.stringify(result)` read every field, so those components keep re-rendering on all of them; `console.log(result)` prints `[Getter]` per field — log the fields instead. See [Re-renders and tracked results](https://ilyaagarkov.github.io/effector-tanstack-query/guides/render-tracking/).
 
 ## [1.0.0] — 2026-08-07
 

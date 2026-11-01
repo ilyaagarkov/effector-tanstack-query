@@ -61,7 +61,8 @@ Per-call callbacks fire **in addition to** the observer-level ones set in `creat
 ```ts
 function useMutation<TData = unknown, TError = Error, TVariables = void>(
   mutation: MutationResult<TData, TError, TVariables>,
-  options?: { notifyOnChangeProps?: 'tracked' | 'all' | Array<field> }, // default: 'tracked'
+  // notifyOnChangeProps: 'tracked' (default) | 'all' | a list of result fields
+  options?: ResultHookOptions<UseMutationResult<TData, TError, TVariables>>,
 ): UseMutationResult<TData, TError, TVariables>
 
 interface UseMutationResult<TData, TError, TVariables> {

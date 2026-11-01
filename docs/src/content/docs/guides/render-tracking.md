@@ -3,7 +3,7 @@ title: Re-renders and tracked results
 description: Result hooks re-render a component only for the fields it reads. How tracking works, how to opt out, and the patterns it changes.
 ---
 
-Every result hook — `useQuery`, `useQueries`, `useInfiniteQuery`, `useMutation` and their Suspense variants — tracks which result fields a component reads, and re-renders it only when one of those fields changes.
+Every result hook — `useQuery`, `useInfiniteQuery`, `useQueries`, their Suspense variants, and `useMutation` — tracks which result fields a component reads, and re-renders it only when one of those fields changes.
 
 ```tsx
 function TodoTitle() {
@@ -21,7 +21,7 @@ Tracking only filters React re-renders. The effector stores (`query.$data`, `que
 The result object exposes its fields as getters. Reading one adds it to the component's tracked set:
 
 - **During render** — the usual case: destructuring, `result.data`, a conditional `result.isError && result.error`.
-- **Later** — a field first read in an event handler or an effect is tracked from that moment on.
+- **Later** — a field first read in an event handler or an effect returns its current value and is tracked from that moment on.
 
 The set only grows: once a field has been read, changes to it re-render the component until it unmounts.
 
@@ -41,9 +41,9 @@ Every result hook accepts `notifyOnChangeProps` in an options object as its last
 // Re-render on every field.
 const result = useQuery(todoQuery, { notifyOnChangeProps: 'all' })
 
-// Re-render on `data` and `error` only — reading `isFetching` here
-// shows its value at the last re-render, without subscribing to it.
-const { data, error } = useQuery(todoQuery, {
+// Re-render on `data` and `error` only. `isFetching` is still readable —
+// it holds the value as of the last render — but doesn't re-render.
+const { data, error, isFetching } = useQuery(todoQuery, {
   notifyOnChangeProps: ['data', 'error'],
 })
 ```
@@ -62,58 +62,58 @@ The Suspense hooks re-render on `status` even when the list leaves it out, so th
 
 ## Patterns to watch
 
-### Fields read only outside render
+### Relying on the re-render itself
 
-A field that isn't read during render doesn't re-render the component when it changes. Code that relied on that re-render stops working:
+Reads keep working wherever they happen: a field read in a handler or an effect returns its current value and subscribes the component from then on. What changes is the re-render as a signal — a component no longer re-renders for fields nobody read.
 
 ```tsx
-function SaveStatus() {
-  const result = useQuery(todoQuery)
-  const ref = React.useRef(result)
-  ref.current = result
+function Page() {
+  const { data } = useQuery(todoQuery)
 
-  // ❌ `isError` is never read during render, so the component doesn't
-  // re-render when it changes, and this effect never re-runs.
+  // ❌ Ran after every refetch in 1.x (isFetching flipped twice).
+  // Now runs only when `data` changes.
   React.useEffect(() => {
-    if (ref.current.isError) toast.error('Failed to load')
+    analytics.track('todo-rendered')
   })
-  return null
+
+  return <Todo todo={data} />
 }
 ```
 
-Read the field during render — typically as an effect dependency:
+Subscribe to the field you actually react to, or move the reaction to the model:
 
 ```tsx
-const { isError } = useQuery(todoQuery)
+const { isFetching } = useQuery(todoQuery)
 React.useEffect(() => {
-  if (isError) toast.error('Failed to load')
-}, [isError])
+  if (!isFetching) analytics.track('todo-refetched')
+}, [isFetching])
+
+// or, outside React:
+sample({ clock: todoQuery.finished.success, target: trackRefetchFx })
 ```
 
-For reactions that don't belong to a component, prefer the model: `sample({ clock: todoQuery.finished.failure, target: showToastFx })`.
+Render-count assertions in tests (`<Profiler>`, `renderHook`) see fewer renders for the same reason.
+
+A result object kept from an earlier render — in a ref, a timer — keeps returning current values until the component re-renders, then stays at the values of that render. That's React's usual stale-closure rule; take the result from the latest render as you would any other value.
 
 ### Spreading the result
 
-Object rest, `{...result}`, `Object.keys(result)` and `JSON.stringify(result)` read every field, so the component re-renders on all of them:
+Object rest, `{...result}`, `Object.values` / `Object.entries`, `JSON.stringify(result)` and `structuredClone(result)` read every field, so the component re-renders on all of them:
 
 ```tsx
 const { data, ...rest } = useQuery(todoQuery) // tracks every field
 <TodoView {...useQuery(todoQuery)} />          // tracks every field
 ```
 
-That's correct, just without the optimisation. Pass the fields the child needs instead.
+That's correct, just without the optimisation. Pass the fields the child needs instead. (`Object.keys` and `for…in` only list the fields and track nothing.)
 
-### Debugging changes what's tracked
+### Logging the result
 
-`console.log(result)` and inspecting the hook in React DevTools read every getter. After that the component re-renders on all fields. If a component re-renders more while you debug it, this is why. Log individual fields (`console.log(result.data)`) instead.
+`console.log(result)` prints `[Getter]` for each field instead of its value, and tracks nothing. Log the fields you need — `console.log(result.data, result.status)` — or spread it while debugging: `console.log({ ...result })` shows every value but, as above, makes the component re-render on every field for as long as the line stays.
 
 ### Family sources made of objects
 
 A `createQueries` family treats an item whose `source` is a different value (by `Object.is`) as a new item, and always re-renders. If the source store produces new objects for the same items on every update, family consumers re-render on every update regardless of tracking. Use primitive ids, or keep object identities stable.
-
-### Values read outside render
-
-Inside event handlers and effects, prefer values read during render. A field read there for the first time returns a current value. Once a tracked field changes, the component re-renders and handlers from that render see the new result.
 
 ## Differences from `@tanstack/react-query`
 
@@ -126,7 +126,7 @@ The default matches: fields are tracked on first read, the set only grows, and c
 | Global default | Yes, via `defaultOptions` | No — per hook call |
 | `useMutation` | Re-renders on every change | Tracked, like the query hooks |
 | What is filtered | The observer skips notifying its listeners | Only React re-renders; effector stores get every update |
-| Reading a field in a handler | The render's value | The current value, until a tracked field changes and the component re-renders |
+| Reading a field in a handler | The value as of the render | The current value, until the component re-renders |
 | Result fields | ~25 (`dataUpdatedAt`, `isStale`, `refetch`, …) | The fields listed on each hook's page |
 
 Two consequences for migrations:

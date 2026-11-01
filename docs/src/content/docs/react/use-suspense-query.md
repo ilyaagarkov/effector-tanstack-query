@@ -59,7 +59,8 @@ The hook returns the **same shape as `useQuery`**, but with the static guarantee
 ```ts
 function useSuspenseQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
-  options?: { notifyOnChangeProps?: 'tracked' | 'all' | Array<field> }, // default: 'tracked'
+  // notifyOnChangeProps: 'tracked' (default) | 'all' | a list of result fields
+  options?: ResultHookOptions<UseSuspenseQueryResult<TData, TError>>,
 ): UseSuspenseQueryResult<TData, TError>
 ```
 
