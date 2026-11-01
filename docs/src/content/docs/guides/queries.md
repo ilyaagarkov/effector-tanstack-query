@@ -5,6 +5,42 @@ description: Reactive query keys, enabled, select, placeholderData, polling, and
 
 A query is created with `createQuery(options)` (the registered default `QueryClient` is used) or `createQuery(queryClient, options)` (explicit client). It returns an object of effector stores and events.
 
+## Reusing query options factories
+
+A factory defines the key and query options using ordinary values. Define it
+with [queryOptions](/effector-tanstack-query/api/query-options/) or keep an
+existing native helper, such as `queryOptions` from `@tanstack/react-query`.
+The same factory works with QueryClient, native hooks and Effector:
+
+```ts
+import { createQuery } from '@effector-tanstack-query/core'
+import { createStore } from 'effector'
+import { useQuery } from '@tanstack/react-query'
+import { todoOptions } from './queries'
+
+// In a server loader:
+await queryClient.fetchQuery(todoOptions({ todoId: 1 }))
+
+// In a native React custom hook:
+function useTodo(todoId: number) {
+  return useQuery(todoOptions({ todoId }))
+}
+
+// In an Effector model:
+const $todoId = createStore(1)
+const todoQuery = createQuery({
+  name: 'todo',
+  source: { todoId: $todoId },
+  query: todoOptions,
+})
+```
+
+Use inline options when defining a query in place, `source + query` when reusing
+a factory, and [`createQueries`](/effector-tanstack-query/api/create-queries/)
+when each source item needs its own query. See the
+[factory reference](/effector-tanstack-query/api/create-query/#factory-form)
+for composition, reactive parameters and override rules.
+
 ## Reactive query keys
 
 Anywhere in `queryKey`, you can use a `Store` instead of a plain value. The query refetches automatically when any store updates.

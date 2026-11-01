@@ -40,7 +40,8 @@
   "files": [
     "dist",
     "src",
-    "!src/__tests__"
+    "!src/__tests__",
+    "LICENSE.TanStack"
   ],
   "sideEffects": false,
   "scripts": {
@@ -49,7 +50,7 @@
     "clean": "rm -rf ./dist ./coverage",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:types": "tsc --noEmit",
+    "test:types": "tsc --noEmit && tsup --dts-only --out-dir .type-tests-dist && tsc -p tsconfig.registered.json && node type-tests/check-helper-exports.mjs",
     "check:publish": "publint && attw --pack ."
   },
   "devDependencies": {

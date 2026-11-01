@@ -1,14 +1,29 @@
 import { attach, createEvent, sample } from 'effector'
 import { QueryObserver } from '@tanstack/query-core'
-import type { QueryClient } from '@tanstack/query-core'
+import type { QueryClient, QueryKey, DefaultError } from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
-import { resolveReactiveRefetchInterval } from './resolve'
+import { resolveQueryArguments, resolveQueryDefinition } from './resolve'
+import type { ResolvedOptions } from './resolve'
 import type {
   CreateQueryOptions,
+  CreateQueryFactoryOptions,
+  OptionsSource,
+  QueryArguments,
   EffectorQueryKey,
   QueryResult,
 } from './types'
 
+export function createQuery<
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  const TQueryKey extends QueryKey = QueryKey,
+  TSource extends OptionsSource = OptionsSource,
+>(
+  ...args: QueryArguments<
+    CreateQueryFactoryOptions<TSource, TQueryFnData, TError, TData, TQueryKey>
+  >
+): QueryResult<TData, TError>
 export function createQuery<
   TQueryFnData = unknown,
   TError = Error,
@@ -32,30 +47,15 @@ export function createQuery<
   TData = TQueryFnData,
   const TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 >(
-  arg1:
-    | QueryClient
-    | CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-  arg2?: CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  ...args: QueryArguments<
+    | CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>
+    | CreateQueryFactoryOptions<any, TQueryFnData, TError, TData, any>
+  >
 ): QueryResult<TData, TError> {
-  const [explicitClient, options] = parseQueryArgs<
-    TQueryFnData,
-    TError,
-    TData,
-    TQueryKey
-  >(arg1, arg2)
-  const { queryKey, enabled, name, ...restOptions } = options
-
+  const [explicitClient, options] = resolveQueryArguments(args)
+  const { name } = options
   if (!name) warnMissingName('createQuery')
-
-  // If `refetchInterval` is a Store, pull it out for reactive wiring in
-  // createBaseQuery — otherwise leave it in restOptions for the observer
-  // constructor (handles plain values and function forms unchanged).
-  const reactiveRefetchInterval = resolveReactiveRefetchInterval(
-    (restOptions as { refetchInterval?: unknown }).refetchInterval,
-  )
-  if (reactiveRefetchInterval) {
-    delete (restOptions as { refetchInterval?: unknown }).refetchInterval
-  }
+  const definition = resolveQueryDefinition(options)
 
   const base = createBaseQuery<
     TData,
@@ -64,39 +64,25 @@ export function createQuery<
     QueryObserver<TQueryFnData, TError, TData>
   >(
     explicitClient,
-    { queryKey, enabled, name, reactiveRefetchInterval },
+    { definition, name },
     {
-      createObserver: (qc, { queryKey: key, enabled: isEnabled }) =>
-        // Cast: restOptions's `refetchInterval` may still type as
-        // `Store | number | false | fn`; the Store form is deleted at runtime
-        // above, but TS can't narrow that here.
-        new QueryObserver<TQueryFnData, TError, TData>(qc, {
-          ...restOptions,
-          queryKey: key,
-          enabled: isEnabled,
-        } as any),
+      createObserver: (qc, options) =>
+        new QueryObserver<TQueryFnData, TError, TData>(qc, options),
     },
   )
 
-  // Prefetch event: drives `queryClient.fetchQuery` directly (no Observer)
-  // and **awaits** the result, so `allSettled(query.prefetch, { scope })` on
-  // the server returns only after the cache has the data. Unlike `mounted`,
-  // which kicks off a background subscription and resolves immediately, this
-  // is the right primitive for SSR / route loaders. The current resolved key
-  // + enabled is read from the scope via attach — reactive keys work.
+  // Prefetch awaits cache loading without mounting an observer. Read the full
+  // options snapshot through attach so factory closures use the current scope.
+  // Unmounted result stores are initialized separately through mounted().
   const prefetch = createEvent<void>()
   const prefetchFx = attach({
     source: {
       qc: base.$queryClient,
-      key: base.$resolvedKey,
-      enabled: base.$enabled,
+      options: base.$options,
     },
-    effect: ({ qc, key, enabled }) => {
-      if (!qc || !enabled) return
-      return qc.fetchQuery({
-        ...restOptions,
-        queryKey: key,
-      } as any)
+    effect: ({ qc, options }) => {
+      if (!qc || !options.enabled) return
+      return qc.fetchQuery(definition.prefetch(options))
     },
   })
   sample({ clock: prefetch, target: prefetchFx })
@@ -133,44 +119,16 @@ export function createQuery<
   // suspended). Not part of the public API; not in TS types.
   Object.defineProperty(result, '__createObserver', {
     enumerable: false,
-    value: (qc: QueryClient, init: { queryKey: any; enabled: boolean }) =>
-      new QueryObserver<TQueryFnData, TError, TData>(qc, {
-        ...restOptions,
-        queryKey: init.queryKey,
-        enabled: init.enabled,
-      } as any),
+    value: (qc: QueryClient, options: ResolvedOptions) =>
+      new QueryObserver<TQueryFnData, TError, TData>(
+        qc,
+        definition.create(options),
+      ),
   })
-  Object.defineProperty(result, '__resolvedKey', {
+  Object.defineProperty(result, '__options', {
     enumerable: false,
-    value: base.$resolvedKey,
-  })
-  Object.defineProperty(result, '__enabled', {
-    enumerable: false,
-    value: base.$enabled,
+    value: base.$options,
   })
 
   return result
-}
-
-function parseQueryArgs<
-  TQueryFnData,
-  TError,
-  TData,
-  TQueryKey extends EffectorQueryKey,
->(
-  arg1:
-    | QueryClient
-    | CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-  arg2?: CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-): [
-  QueryClient | null,
-  CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-] {
-  if (arg2 !== undefined) {
-    return [arg1 as QueryClient, arg2]
-  }
-  return [
-    null,
-    arg1 as CreateQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-  ]
 }

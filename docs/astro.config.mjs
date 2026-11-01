@@ -116,6 +116,7 @@ export default defineConfig({
           label: 'API reference',
           items: [
             { label: 'createQuery', slug: 'api/create-query' },
+            { label: 'Options helpers', slug: 'api/query-options' },
             { label: 'createQueries', slug: 'api/create-queries' },
             { label: 'createMutation', slug: 'api/create-mutation' },
             { label: 'createInfiniteQuery', slug: 'api/create-infinite-query' },

@@ -1,3 +1,5 @@
+import type { Store } from 'effector'
+import type { ResolvedOptions } from '../resolve'
 import { allSettled, createEvent, createStore, fork } from 'effector'
 import { QueryClient } from '@tanstack/query-core'
 import { queryKey, sleep } from './test-utils'
@@ -6,8 +8,6 @@ import { createQuery } from '../createQuery'
 
 // Testing strategy:
 // - fork() creates an isolated scope: store state changes don't bleed between tests
-// - allSettled(event, { scope }) fires the event in scope and waits for ALL effects
-//   (including setupSubscriptionFx triggered via sample) to settle
 // - vi.advanceTimersByTimeAsync resolves async queryFn promises (sleep-based)
 // - Store updates in tests use events (.on) because allSettled(event) reliably
 //   triggers the reactive graph; direct store allSettled may not propagate derived stores
@@ -323,13 +323,18 @@ describe('createQuery', () => {
     })
 
     const factory = query as typeof query & {
+      __options: Store<ResolvedOptions>
       __createObserver: (
         qc: QueryClient,
-        init: { queryKey: unknown; enabled: boolean },
+        options: ResolvedOptions,
       ) => { options: { queryKey: unknown }; destroy: () => void }
     }
 
+    const scope = fork()
+    const options = scope.getState(factory.__options)
+
     const observer = factory.__createObserver(queryClient, {
+      ...options,
       queryKey: ['transient'],
       enabled: true,
     })

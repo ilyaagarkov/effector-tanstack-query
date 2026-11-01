@@ -1,5 +1,7 @@
-import type { Event, EventCallable, Store } from 'effector'
+import type { InfiniteOptions, NoInfer } from './optionsCompat'
+import type { Event, EventCallable, GetCombinedValue, Store } from 'effector'
 import type {
+  DefaultError,
   FetchStatus,
   InfiniteData,
   InfiniteQueryObserver,
@@ -483,3 +485,86 @@ export interface QueriesResult<TItem, TData = unknown, TError = Error> {
    */
   readonly __family: true
 }
+
+/** Query calls use the default client or an explicit first argument. */
+export type QueryArguments<TOptions> =
+  | [options: TOptions]
+  | [queryClient: QueryClient, options: TOptions]
+
+/** One store or a shallow object/array of stores; use combine for nested shapes. */
+export type OptionsSource =
+  | Store<unknown>
+  | Readonly<Record<string, Store<unknown>>>
+  // Infer array literals as tuples while rejecting undefined/non-store entries.
+  | (ReadonlyArray<Store<unknown>> &
+      readonly [Store<unknown>?, ...Store<unknown>[]])
+export type SourceValue<TSource extends OptionsSource> =
+  TSource extends Store<infer V>
+    ? V
+    : GetCombinedValue<TSource>
+
+type FactoryOverrides<Interval> = {
+  name?: string
+  enabled?: StoreOrValue<boolean>
+  refetchInterval?: Interval | Store<number | false | undefined>
+}
+type FactoryOnly<Options> = {
+  [P in Exclude<keyof Options, 'enabled' | 'refetchInterval'>]?: never
+}
+
+/**
+ * Reuses ordinary options factories. Runtime enabled is boolean; native
+ * helper return types also include callback enabled, so a callback value
+ * requires a boolean top-level override. Use combine for derived conditions.
+ */
+export type CreateQueryFactoryOptions<
+  TSource extends OptionsSource,
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+> = {
+  source: TSource
+  // Infer keys from the options' callbacks, not their extra DataTag symbols.
+  query: (
+    source: SourceValue<TSource>,
+  ) => Omit<
+    QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
+    'queryKey'
+  > & { queryKey: NoInfer<TQueryKey> }
+} & FactoryOverrides<
+  QueryObserverOptions<
+    NoInfer<TQueryFnData>,
+    NoInfer<TError>,
+    NoInfer<TData>,
+    NoInfer<TQueryFnData>,
+    NoInfer<TQueryKey>
+  >['refetchInterval']
+> &
+  FactoryOnly<QueryObserverOptions>
+
+export type CreateInfiniteQueryFactoryOptions<
+  TSource extends OptionsSource,
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TPageParam = unknown,
+  TData = InfiniteData<TQueryFnData, TPageParam>,
+  TQueryKey extends QueryKey = QueryKey,
+> = {
+  source: TSource
+  query: (
+    source: SourceValue<TSource>,
+  ) => Omit<
+    InfiniteOptions<TQueryFnData, TError, TData, TQueryKey, TPageParam>,
+    'queryKey'
+  > & { queryKey: NoInfer<TQueryKey> }
+} & FactoryOverrides<
+  InfiniteOptions<
+    NoInfer<TQueryFnData>,
+    NoInfer<TError>,
+    NoInfer<TData>,
+    NoInfer<TQueryKey>,
+    NoInfer<TPageParam>
+  >['refetchInterval']
+> &
+  FactoryOnly<InfiniteQueryObserverOptions>

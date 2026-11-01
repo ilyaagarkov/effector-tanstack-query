@@ -44,6 +44,35 @@ function createInfiniteQuery<
 | `name`                 | `string` (recommended)                                | Stable name for SID-based SSR          |
 | ...rest                | All other `InfiniteQueryObserverOptions`              | `select`, `staleTime`, `placeholderData`, ... |
 
+## Factory form
+
+Use an infinite options factory with reactive parameters:
+
+```ts
+import { createInfiniteQuery } from '@effector-tanstack-query/core'
+import { createStore } from 'effector'
+import { postsOptions } from './queries'
+
+const $category = createStore('news')
+const postsQuery = createInfiniteQuery({
+  name: 'posts',
+  source: { category: $category },
+  query: postsOptions,
+})
+```
+
+The factory returns `queryKey`, `queryFn`, `initialPageParam`, `getNextPageParam`
+and any other TanStack options, including `select` and `getPreviousPageParam`.
+See [`infiniteQueryOptions`](/effector-tanstack-query/api/query-options/#infinitequeryoptions)
+for a complete factory definition. Source changes update all options together,
+including page functions; the query key identifies the cached page set.
+
+The [source and override rules](/effector-tanstack-query/api/create-query/#factory-form)
+are shared with `createQuery`, including shallow store objects and arrays/tuples.
+Only `name`, `enabled` and `refetchInterval` are
+accepted at the top level. An explicit client can be passed first:
+`createInfiniteQuery(queryClient, { source, query })`.
+
 ## Cancellation
 
 Like `createQuery`, the page `queryFn` receives the standard TanStack [`AbortSignal`](https://tanstack.com/query/latest/docs/framework/react/guides/query-cancellation) as `context.signal`. Forward it to `fetch` and in-flight page requests cancel automatically on key change, `unmounted()`, or a [`createCancel`](/effector-tanstack-query/api/cache-actions/) event.
