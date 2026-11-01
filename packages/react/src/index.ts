@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useUnit } from 'effector-react'
+import { useProvidedScope, useUnit } from 'effector-react'
 import type { Store } from 'effector'
 import { hydrate } from '@tanstack/query-core'
 import type {
@@ -27,6 +27,51 @@ import type {
   QueriesResult,
   QueryResult,
 } from '@effector-tanstack-query/core'
+import {
+  readRow,
+  storeRow,
+  trackedResult,
+  useStoreRows,
+  useTrackedRows,
+  watchStores,
+} from './tracked'
+import type { ResultHookOptions, Row, StoreRow } from './tracked'
+
+export type { NotifyOnChangeProps, ResultHookOptions } from './tracked'
+
+const QUERY_FIELDS = [
+  'data',
+  'error',
+  'status',
+  'isPending',
+  'isFetching',
+  'isSuccess',
+  'isError',
+  'isPlaceholderData',
+  'fetchStatus',
+] as const
+
+const INFINITE_QUERY_FIELDS = [
+  ...QUERY_FIELDS,
+  'hasNextPage',
+  'hasPreviousPage',
+  'isFetchingNextPage',
+  'isFetchingPreviousPage',
+  'isFetchNextPageError',
+  'isFetchPreviousPageError',
+] as const
+
+const MUTATION_FIELDS = [
+  'data',
+  'error',
+  'status',
+  'variables',
+  'isPaused',
+  'isPending',
+  'isSuccess',
+  'isError',
+  'isIdle',
+] as const
 
 export interface HydrationBoundaryProps {
   /**
@@ -87,21 +132,18 @@ export interface UseQueryResult<TData, TError = Error> {
 /**
  * Subscribes a React component to a query, automatically calling
  * `mounted()` on mount and `unmounted()` on cleanup.
+ *
+ * Re-renders only when a result field the component read changes — see
+ * {@link ResultHookOptions} to re-render on every field instead.
  */
 export function useQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
+  options?: ResultHookOptions,
 ): UseQueryResult<TData, TError> {
-  const state = useUnit({
-    data: query.$data,
-    error: query.$error,
-    status: query.$status,
-    isPending: query.$isPending,
-    isFetching: query.$isFetching,
-    isSuccess: query.$isSuccess,
-    isError: query.$isError,
-    isPlaceholderData: query.$isPlaceholderData,
-    fetchStatus: query.$fetchStatus,
-  })
+  const { snapshot, track } = useStoreRows(
+    [storeRow(query, QUERY_FIELDS)],
+    options?.notifyOnChangeProps,
+  )
 
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
@@ -112,7 +154,12 @@ export function useQuery<TData, TError = Error>(
     return () => unmount()
   }, [mount, unmount])
 
-  return { ...state, refresh }
+  return trackedResult(
+    QUERY_FIELDS,
+    (field) => snapshot.rows[0]![field],
+    (field) => track(0, field),
+    { refresh },
+  )
 }
 
 export interface UseMutationResult<TData, TError, TVariables> {
@@ -149,18 +196,12 @@ export interface UseMutationResult<TData, TError, TVariables> {
  */
 export function useMutation<TData = unknown, TError = Error, TVariables = void>(
   mutation: MutationResult<TData, TError, TVariables>,
+  options?: ResultHookOptions,
 ): UseMutationResult<TData, TError, TVariables> {
-  const state = useUnit({
-    data: mutation.$data,
-    error: mutation.$error,
-    status: mutation.$status,
-    variables: mutation.$variables,
-    isPaused: mutation.$isPaused,
-    isPending: mutation.$isPending,
-    isSuccess: mutation.$isSuccess,
-    isError: mutation.$isError,
-    isIdle: mutation.$isIdle,
-  })
+  const { snapshot, track } = useStoreRows(
+    [storeRow(mutation, MUTATION_FIELDS)],
+    options?.notifyOnChangeProps,
+  )
 
   const start = useUnit(mutation.start)
   const unmount = useUnit(mutation.unmounted)
@@ -173,7 +214,12 @@ export function useMutation<TData = unknown, TError = Error, TVariables = void>(
     return () => unmount()
   }, [start, unmount])
 
-  return { ...state, mutate, mutateWith, reset }
+  return trackedResult(
+    MUTATION_FIELDS,
+    (field) => snapshot.rows[0]![field],
+    (field) => track(0, field),
+    { mutate, mutateWith, reset },
+  )
 }
 
 // =============================================================================
@@ -259,24 +305,12 @@ export interface UseInfiniteQueryResult<TData, TError> {
  */
 export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
+  options?: ResultHookOptions,
 ): UseInfiniteQueryResult<TData, TError> {
-  const state = useUnit({
-    data: query.$data,
-    error: query.$error,
-    status: query.$status,
-    isPending: query.$isPending,
-    isFetching: query.$isFetching,
-    isSuccess: query.$isSuccess,
-    isError: query.$isError,
-    isPlaceholderData: query.$isPlaceholderData,
-    fetchStatus: query.$fetchStatus,
-    hasNextPage: query.$hasNextPage,
-    hasPreviousPage: query.$hasPreviousPage,
-    isFetchingNextPage: query.$isFetchingNextPage,
-    isFetchingPreviousPage: query.$isFetchingPreviousPage,
-    isFetchNextPageError: query.$isFetchNextPageError,
-    isFetchPreviousPageError: query.$isFetchPreviousPageError,
-  })
+  const { snapshot, track } = useStoreRows(
+    [storeRow(query, INFINITE_QUERY_FIELDS)],
+    options?.notifyOnChangeProps,
+  )
 
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
@@ -289,7 +323,12 @@ export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
     return () => unmount()
   }, [mount, unmount])
 
-  return { ...state, refresh, fetchNextPage, fetchPreviousPage }
+  return trackedResult(
+    INFINITE_QUERY_FIELDS,
+    (field) => snapshot.rows[0]![field],
+    (field) => track(0, field),
+    { refresh, fetchNextPage, fetchPreviousPage },
+  )
 }
 
 // =============================================================================
@@ -311,40 +350,42 @@ export type UseQueriesTupleResult<T extends UseQueriesTuple> = {
     : never
 }
 
+/**
+ * Tracking is per item and per field: reading `results[0].data` re-renders
+ * on that query's data only. A different tuple, or a family source adding
+ * or removing items, always re-renders.
+ */
 export function useQueries<const T extends UseQueriesTuple>(
   queries: T,
+  options?: ResultHookOptions,
 ): UseQueriesTupleResult<T>
 export function useQueries<TItem, TData, TError>(
   family: QueriesResult<TItem, TData, TError>,
+  options?: ResultHookOptions,
 ): ReadonlyArray<UseQueryResult<TData, TError>>
 export function useQueries(
   arg: UseQueriesTuple | QueriesResult<unknown, unknown, unknown>,
+  options?: ResultHookOptions,
 ): UseQueriesTupleResult<UseQueriesTuple> | ReadonlyArray<UseQueryResult<unknown, unknown>> {
   if (Array.isArray(arg)) {
-    return useQueriesTuple(arg)
+    return useQueriesTuple(arg, options)
   }
-  return useQueriesFamily(arg as QueriesResult<unknown, unknown, unknown>)
+  return useQueriesFamily(
+    arg as QueriesResult<unknown, unknown, unknown>,
+    options,
+  )
 }
 
 function useQueriesTuple<T extends UseQueriesTuple>(
   queries: T,
+  options: ResultHookOptions | undefined,
 ): UseQueriesTupleResult<T> {
-  // Twelve `useUnit` calls — count is FIXED, independent of N. The
-  // array argument may grow / shrink between renders; effector-react
-  // re-subscribes the underlying stores transparently.
-  //
-  // Rules-of-hooks constraint: the SHAPE of the call list must be
-  // stable, not the length of each input array. We satisfy this with a
-  // fixed sequence of 9 state-store calls + 3 event-bind calls.
-  const datas              = useUnit(queries.map((q) => q.$data))
-  const errors             = useUnit(queries.map((q) => q.$error))
-  const statuses           = useUnit(queries.map((q) => q.$status))
-  const isPendings         = useUnit(queries.map((q) => q.$isPending))
-  const isFetchings        = useUnit(queries.map((q) => q.$isFetching))
-  const isSuccesses        = useUnit(queries.map((q) => q.$isSuccess))
-  const isErrors           = useUnit(queries.map((q) => q.$isError))
-  const isPlaceholderDatas = useUnit(queries.map((q) => q.$isPlaceholderData))
-  const fetchStatuses      = useUnit(queries.map((q) => q.$fetchStatus))
+  // One tracked subscription over every item's stores; the array may grow
+  // or shrink between renders without changing the hook count.
+  const { snapshot, track } = useStoreRows(
+    queries.map((q) => storeRow(q, QUERY_FIELDS)),
+    options?.notifyOnChangeProps,
+  )
 
   const mounts    = useUnit(queries.map((q) => q.mounted))
   const unmounts  = useUnit(queries.map((q) => q.unmounted))
@@ -362,24 +403,42 @@ function useQueriesTuple<T extends UseQueriesTuple>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queries.length])
 
-  return queries.map((_, i) => ({
-    data:              datas[i],
-    error:             errors[i],
-    status:            statuses[i],
-    isPending:         isPendings[i],
-    isFetching:        isFetchings[i],
-    isSuccess:         isSuccesses[i],
-    isError:           isErrors[i],
-    isPlaceholderData: isPlaceholderDatas[i],
-    fetchStatus:       fetchStatuses[i],
-    refresh:           refreshes[i],
-  })) as UseQueriesTupleResult<T>
+  return queries.map((_, i) =>
+    trackedResult(
+      QUERY_FIELDS,
+      (field) => snapshot.rows[i]?.[field],
+      (field) => track(i, field),
+      { refresh: refreshes[i] },
+    ),
+  ) as UseQueriesTupleResult<T>
+}
+
+/** Family items are the rows; an item with a new source is a new entity. */
+function useFamilyRows(
+  family: QueriesResult<any, any, any>,
+  mode: ResultHookOptions['notifyOnChangeProps'],
+  always?: ReadonlyArray<string>,
+) {
+  const scope = useProvidedScope()
+  return useTrackedRows({
+    deps: [scope, family.$items],
+    subscribe: (notify) => watchStores([family.$items], scope, notify),
+    read: () => readRow({ items: family.$items }, scope).items as Row[],
+    mode,
+    always,
+    sameRow: (a, b) => Object.is(a.source, b.source),
+  })
 }
 
 function useQueriesFamily<TItem, TData, TError>(
   family: QueriesResult<TItem, TData, TError>,
+  options: ResultHookOptions | undefined,
 ): ReadonlyArray<UseQueryResult<TData, TError>> {
-  const items = useUnit(family.$items)
+  const { snapshot, track } = useFamilyRows(
+    family,
+    options?.notifyOnChangeProps,
+  )
+  const items = snapshot.rows as ReadonlyArray<Row & { source: TItem }>
   const mount = useUnit(family.mounted)
   const unmount = useUnit(family.unmounted)
   const refreshOne = useUnit(family.refreshOne)
@@ -389,20 +448,16 @@ function useQueriesFamily<TItem, TData, TError>(
     return () => unmount()
   }, [mount, unmount])
 
-  return items.map((it) => ({
-    data:              it.data,
-    error:             it.error,
-    status:            it.status,
-    isPending:         it.isPending,
-    isFetching:        it.isFetching,
-    isSuccess:         it.isSuccess,
-    isError:           it.isError,
-    isPlaceholderData: it.isPlaceholderData,
-    fetchStatus:       it.fetchStatus,
-    // Per-item refresh — routes through the family's `refreshOne(item)`
-    // so the consumer doesn't have to thread the source manually.
-    refresh:           () => refreshOne(it.source),
-  }))
+  return items.map((it, i) =>
+    trackedResult(
+      QUERY_FIELDS,
+      (field) => (snapshot.rows[i] ?? it)[field],
+      (field) => track(i, field),
+      // Per-item refresh — routes through the family's `refreshOne(item)`
+      // so the consumer doesn't have to thread the source manually.
+      { refresh: () => refreshOne(it.source) },
+    ),
+  )
 }
 
 // Suspense data path: read from a per-scope observer.
@@ -418,15 +473,82 @@ function useQueriesFamily<TItem, TData, TError>(
 // The mount/unmount effect is still wired up so that other consumers reading
 // the same query through `useUnit` / `useQuery` see updates in scope state.
 
-function useObserverRerender(
-  observer: { subscribe: (cb: () => void) => () => void } | null,
-): void {
-  const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
-  React.useEffect(() => {
-    if (!observer) return
-    return observer.subscribe(forceRender)
-  }, [observer])
+interface RenderObserver {
+  subscribe(cb: () => void): () => void
+  getCurrentResult(): object
 }
+
+const SUSPENSE_FIELDS = [
+  'data',
+  'error',
+  'status',
+  'isFetching',
+  'isPlaceholderData',
+  'fetchStatus',
+] as const
+
+const SUSPENSE_INFINITE_FIELDS = [
+  ...SUSPENSE_FIELDS,
+  'hasNextPage',
+  'hasPreviousPage',
+  'isFetchingNextPage',
+  'isFetchingPreviousPage',
+  'isFetchNextPageError',
+  'isFetchPreviousPageError',
+] as const
+
+// Past the gate `status` is always 'success', so it isn't a result field the
+// component can track — but the gate reads it, so it always re-renders.
+const SUSPENSE_GATE = ['status']
+
+/**
+ * Tracked rows for the suspense hooks. A row comes from its observer when
+ * there is one — the observer notifies as soon as the cache changes — and
+ * from the scope's stores otherwise (server render of a serialized scope).
+ */
+function useSuspenseRows(
+  stores: ReadonlyArray<StoreRow>,
+  observers: ReadonlyArray<RenderObserver | null>,
+  fields: ReadonlyArray<string>,
+  mode: ResultHookOptions['notifyOnChangeProps'],
+) {
+  const scope = useProvidedScope()
+  const storeList = stores.flatMap((row) => Object.values(row))
+  return useTrackedRows({
+    deps: [scope, ...observers, ...storeList],
+    subscribe: (notify) => {
+      const unsubscribes = observers.map((obs) => obs?.subscribe(notify))
+      const unwatch = watchStores(storeList, scope, notify)
+      return () => {
+        unwatch()
+        for (const unsubscribe of unsubscribes) unsubscribe?.()
+      }
+    },
+    read: () =>
+      stores.map((row, i) => {
+        const obs = observers[i]
+        if (!obs) return readRow(row, scope)
+        const result = obs.getCurrentResult() as Row
+        const picked: Row = {}
+        for (const field of fields) picked[field] = result[field]
+        return picked
+      }),
+    mode,
+    always: SUSPENSE_GATE,
+  })
+}
+
+/** The result fields a suspense hook tracks; the rest are constants. */
+const SUSPENSE_TRACKED = SUSPENSE_FIELDS.filter((f) => f !== 'status')
+const SUSPENSE_INFINITE_TRACKED = SUSPENSE_INFINITE_FIELDS.filter(
+  (f) => f !== 'status',
+)
+const SUSPENSE_SUCCESS = {
+  status: 'success',
+  isPending: false,
+  isSuccess: true,
+  isError: false,
+} as const
 
 type SuspenseOptions = QueryObserverOptions<any, any, any, any, any>
 interface SuspenseFactory<TObserver> {
@@ -506,6 +628,7 @@ function noQueryClientError(hook: string): Error {
  */
 export function useSuspenseQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
+  options?: ResultHookOptions,
 ): UseSuspenseQueryResult<TData, TError> {
   // Auto-mount lifecycle so concurrent consumers (useUnit / useQuery) reading
   // the same query through the effector scope stay in sync.
@@ -518,26 +641,24 @@ export function useSuspenseQuery<TData, TError = Error>(
   }, [mount, unmount])
 
   const observer = useSuspenseObserver(query)
-  useObserverRerender(observer)
 
-  // Store snapshot — always read so hook order is fixed across renders.
-  // The observer path doesn't use it; the store-only path (server-RSC of
+  // Store snapshot — always subscribed so hook order is fixed across renders.
+  // The observer path doesn't read it; the store-only path (server-RSC of
   // a scope rehydrated from `serialize`, where `$observer` and
   // `$queryClient` are both `null` because they're `serialize: 'ignore'`)
   // reads everything from here.
-  const state = useUnit({
-    data: query.$data,
-    error: query.$error,
-    status: query.$status,
-    isFetching: query.$isFetching,
-    isPlaceholderData: query.$isPlaceholderData,
-    fetchStatus: query.$fetchStatus,
-  })
+  const { snapshot, track } = useSuspenseRows(
+    [storeRow(query, SUSPENSE_FIELDS)],
+    [observer],
+    SUSPENSE_FIELDS,
+    options?.notifyOnChangeProps,
+  )
 
   // Observer path: `getOptimisticResult` reads from `QueryCache`
   // synchronously and reflects fetches/refetches the moment the observer
   // notifies. Used whenever we have an in-scope observer
   // (post-`mounted()`) or a transient one built from `$queryClient`.
+  let values: Row
   if (observer) {
     const result = observer.getOptimisticResult(observer.options as any)
 
@@ -545,43 +666,27 @@ export function useSuspenseQuery<TData, TError = Error>(
     if (result.status === 'pending') {
       throw observer.fetchOptimistic(observer.options as any)
     }
-
-    return {
-      data: result.data as TData,
-      error: result.error as TError | null,
-      status: 'success',
-      isPending: false,
-      isSuccess: true,
-      isError: false,
-      isFetching: result.isFetching,
-      isPlaceholderData: result.isPlaceholderData,
-      fetchStatus: result.fetchStatus,
-      refresh,
+    values = result as unknown as Row
+  } else {
+    // Store-only path: no observer materialisable. Trust `$status` —
+    // populated by `prefetchQueries` before the scope was serialised. A
+    // pending status here means there's no `QueryClient` and no prefetch
+    // happened: can't deduplicate-throw a fetch promise, so surface the
+    // misconfiguration as an error to `<ErrorBoundary>`.
+    const state = snapshot.rows[0]!
+    if (state.status === 'error') throw state.error
+    if (state.status === 'pending') {
+      throw noQueryClientError('useSuspenseQuery')
     }
+    values = state
   }
 
-  // Store-only path: no observer materialisable. Trust `$status` —
-  // populated by `prefetchQueries` before the scope was serialised. A
-  // pending status here means there's no `QueryClient` and no prefetch
-  // happened: can't deduplicate-throw a fetch promise, so surface the
-  // misconfiguration as an error to `<ErrorBoundary>`.
-  if (state.status === 'error') throw state.error
-  if (state.status === 'pending') {
-    throw noQueryClientError('useSuspenseQuery')
-  }
-
-  return {
-    data: state.data as TData,
-    error: state.error as TError | null,
-    status: 'success',
-    isPending: false,
-    isSuccess: true,
-    isError: false,
-    isFetching: state.isFetching,
-    isPlaceholderData: state.isPlaceholderData,
-    fetchStatus: state.fetchStatus,
-    refresh,
-  }
+  return trackedResult(
+    SUSPENSE_TRACKED,
+    (field) => values[field],
+    (field) => track(0, field),
+    { ...SUSPENSE_SUCCESS, refresh },
+  )
 }
 
 export interface UseSuspenseInfiniteQueryResult<TData, TError = Error> {
@@ -615,6 +720,7 @@ export function useSuspenseInfiniteQuery<
   TPageParam = unknown,
 >(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
+  options?: ResultHookOptions,
 ): UseSuspenseInfiniteQueryResult<TData, TError> {
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
@@ -627,27 +733,19 @@ export function useSuspenseInfiniteQuery<
   }, [mount, unmount])
 
   const observer = useSuspenseObserver(query)
-  useObserverRerender(observer)
 
   // See `useSuspenseQuery` for the observer-vs-stores dual path rationale.
   // Infinite queries carry pagination fields in separate effector stores
-  // (`$hasNextPage`, `$isFetchingNextPage`, …), so the store snapshot has
-  // to read those too.
-  const state = useUnit({
-    data: query.$data,
-    error: query.$error,
-    status: query.$status,
-    isFetching: query.$isFetching,
-    isPlaceholderData: query.$isPlaceholderData,
-    fetchStatus: query.$fetchStatus,
-    hasNextPage: query.$hasNextPage,
-    hasPreviousPage: query.$hasPreviousPage,
-    isFetchingNextPage: query.$isFetchingNextPage,
-    isFetchingPreviousPage: query.$isFetchingPreviousPage,
-    isFetchNextPageError: query.$isFetchNextPageError,
-    isFetchPreviousPageError: query.$isFetchPreviousPageError,
-  })
+  // (`$hasNextPage`, `$isFetchingNextPage`, …), so the store row has to
+  // read those too.
+  const { snapshot, track } = useSuspenseRows(
+    [storeRow(query, SUSPENSE_INFINITE_FIELDS)],
+    [observer],
+    SUSPENSE_INFINITE_FIELDS,
+    options?.notifyOnChangeProps,
+  )
 
+  let values: Row
   if (observer) {
     const obs = observer
     const result = obs.getOptimisticResult(obs.options as any)
@@ -660,64 +758,23 @@ export function useSuspenseInfiniteQuery<
         }
       ).fetchOptimistic(obs.options)
     }
-
-    const r = result as typeof result & {
-      hasNextPage: boolean
-      hasPreviousPage: boolean
-      isFetchingNextPage: boolean
-      isFetchingPreviousPage: boolean
-      isFetchNextPageError: boolean
-      isFetchPreviousPageError: boolean
+    values = result as unknown as Row
+  } else {
+    // Store-only path (server-RSC of a hydrated scope).
+    const state = snapshot.rows[0]!
+    if (state.status === 'error') throw state.error
+    if (state.status === 'pending') {
+      throw noQueryClientError('useSuspenseInfiniteQuery')
     }
-
-    return {
-      data: r.data as TData,
-      error: r.error as TError | null,
-      status: 'success',
-      isPending: false,
-      isSuccess: true,
-      isError: false,
-      isFetching: r.isFetching,
-      isPlaceholderData: r.isPlaceholderData,
-      fetchStatus: r.fetchStatus,
-      hasNextPage: r.hasNextPage,
-      hasPreviousPage: r.hasPreviousPage,
-      isFetchingNextPage: r.isFetchingNextPage,
-      isFetchingPreviousPage: r.isFetchingPreviousPage,
-      isFetchNextPageError: r.isFetchNextPageError,
-      isFetchPreviousPageError: r.isFetchPreviousPageError,
-      refresh,
-      fetchNextPage,
-      fetchPreviousPage,
-    }
+    values = state
   }
 
-  // Store-only path (server-RSC of a hydrated scope).
-  if (state.status === 'error') throw state.error
-  if (state.status === 'pending') {
-    throw noQueryClientError('useSuspenseInfiniteQuery')
-  }
-
-  return {
-    data: state.data as TData,
-    error: state.error as TError | null,
-    status: 'success',
-    isPending: false,
-    isSuccess: true,
-    isError: false,
-    isFetching: state.isFetching,
-    isPlaceholderData: state.isPlaceholderData,
-    fetchStatus: state.fetchStatus,
-    hasNextPage: state.hasNextPage,
-    hasPreviousPage: state.hasPreviousPage,
-    isFetchingNextPage: state.isFetchingNextPage,
-    isFetchingPreviousPage: state.isFetchingPreviousPage,
-    isFetchNextPageError: state.isFetchNextPageError,
-    isFetchPreviousPageError: state.isFetchPreviousPageError,
-    refresh,
-    fetchNextPage,
-    fetchPreviousPage,
-  }
+  return trackedResult(
+    SUSPENSE_INFINITE_TRACKED,
+    (field) => values[field],
+    (field) => track(0, field),
+    { ...SUSPENSE_SUCCESS, refresh, fetchNextPage, fetchPreviousPage },
+  )
 }
 
 /**
@@ -736,6 +793,7 @@ function useSuspenseObserver<
     options: { queryKey: unknown }
     setOptions(options: any): void
     subscribe(cb: () => void): () => void
+    getCurrentResult(): object
     getOptimisticResult(options: any): {
       status: 'pending' | 'success' | 'error'
       data: unknown
@@ -796,25 +854,30 @@ export type UseSuspenseQueriesTupleResult<T extends UseSuspenseQueriesTuple> = {
 
 export function useSuspenseQueries<const T extends UseSuspenseQueriesTuple>(
   queries: T,
+  options?: ResultHookOptions,
 ): UseSuspenseQueriesTupleResult<T>
 export function useSuspenseQueries<TItem, TData, TError>(
   family: QueriesResult<TItem, TData, TError>,
+  options?: ResultHookOptions,
 ): ReadonlyArray<UseSuspenseQueryResult<TData, TError>>
 export function useSuspenseQueries(
   arg: UseSuspenseQueriesTuple | QueriesResult<unknown, unknown, unknown>,
+  options?: ResultHookOptions,
 ):
   | UseSuspenseQueriesTupleResult<UseSuspenseQueriesTuple>
   | ReadonlyArray<UseSuspenseQueryResult<unknown, unknown>> {
   if (Array.isArray(arg)) {
-    return useSuspenseQueriesTuple(arg)
+    return useSuspenseQueriesTuple(arg, options)
   }
   return useSuspenseQueriesFamily(
     arg as QueriesResult<unknown, unknown, unknown>,
+    options,
   )
 }
 
 function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
   queries: T,
+  options: ResultHookOptions | undefined,
 ): UseSuspenseQueriesTupleResult<T> {
   // Mount lifecycle (same as `useQueriesTuple`).
   const mounts = useUnit(queries.map((q) => q.mounted))
@@ -827,14 +890,6 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queries.length])
-
-  // Per-query state from stores — fixed hook count.
-  const datas = useUnit(queries.map((q) => q.$data))
-  const errors = useUnit(queries.map((q) => q.$error))
-  const statuses = useUnit(queries.map((q) => q.$status))
-  const isFetchings = useUnit(queries.map((q) => q.$isFetching))
-  const isPlaceholderDatas = useUnit(queries.map((q) => q.$isPlaceholderData))
-  const fetchStatuses = useUnit(queries.map((q) => q.$fetchStatus))
 
   const observersInScope = useUnit(queries.map((q) => q.$observer))
   const qcs = useUnit(queries.map((q) => q.$queryClient))
@@ -863,6 +918,7 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
   type SuspendableObserver = {
     options: { queryKey: unknown }
     subscribe(cb: () => void): () => void
+    getCurrentResult(): object
     fetchOptimistic(options: any): Promise<unknown>
     getOptimisticResult(options: any): {
       status: 'pending' | 'success' | 'error'
@@ -880,18 +936,15 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
         | null,
   )
 
-  // Subscribe to every live observer in one effect so the consumer
-  // re-renders when ANY of them notifies.
-  const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
-  React.useEffect(() => {
-    const unsubs = observers.map((obs) =>
-      obs ? obs.subscribe(forceRender) : null,
-    )
-    return () => {
-      for (const u of unsubs) u?.()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queries.length, ...observers])
+  // One tracked subscription over every live observer plus the stores
+  // (store-only slots on a serialized server scope).
+  const { snapshot, track } = useSuspenseRows(
+    queries.map((q) => storeRow(q, SUSPENSE_FIELDS)),
+    observers,
+    SUSPENSE_FIELDS,
+    options?.notifyOnChangeProps,
+  )
+  const rows = snapshot.rows
 
   // Per-slot live result — from observer if available (synchronous
   // QueryCache read), otherwise null and we fall back to the
@@ -907,8 +960,8 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
     const live = liveResults[i]
     if (live) {
       if (live.status === 'error') throw live.error
-    } else if (statuses[i] === 'error') {
-      throw errors[i]
+    } else if (rows[i]!.status === 'error') {
+      throw rows[i]!.error
     }
   }
 
@@ -924,7 +977,7 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
       if (live.status === 'pending' && obs) {
         pendingPromises.push(obs.fetchOptimistic(obs.options))
       }
-    } else if (statuses[i] === 'pending') {
+    } else if (rows[i]!.status === 'pending') {
       throw noQueryClientError('useSuspenseQueries')
     }
   }
@@ -934,21 +987,13 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
   // result when present (reflects in-flight refetches), fall back to
   // the store snapshot otherwise.
   return queries.map((_, i) => {
-    const live = liveResults[i]
-    return {
-      data: (live ? live.data : datas[i]) as unknown,
-      error: (live ? live.error : (errors[i] ?? null)) as unknown,
-      status: 'success' as const,
-      isPending: false as const,
-      isSuccess: true as const,
-      isError: false as const,
-      isFetching: (live ? live.isFetching : isFetchings[i]) as boolean,
-      isPlaceholderData: (live
-        ? live.isPlaceholderData
-        : isPlaceholderDatas[i]) as boolean,
-      fetchStatus: (live ? live.fetchStatus : fetchStatuses[i]) as FetchStatus,
-      refresh: refreshes[i] as () => void,
-    }
+    const values = (liveResults[i] ?? rows[i]!) as Row
+    return trackedResult(
+      SUSPENSE_TRACKED,
+      (field) => (field === 'error' ? (values.error ?? null) : values[field]),
+      (field) => track(i, field),
+      { ...SUSPENSE_SUCCESS, refresh: refreshes[i] },
+    )
   }) as UseSuspenseQueriesTupleResult<T>
 }
 
@@ -961,6 +1006,7 @@ interface FamilyInternals<TItem> {
 
 function useSuspenseQueriesFamily<TItem, TData, TError>(
   family: QueriesResult<TItem, TData, TError>,
+  options: ResultHookOptions | undefined,
 ): ReadonlyArray<UseSuspenseQueryResult<TData, TError>> {
   const mount = useUnit(family.mounted)
   const unmount = useUnit(family.unmounted)
@@ -970,7 +1016,12 @@ function useSuspenseQueriesFamily<TItem, TData, TError>(
     return () => unmount()
   }, [mount, unmount])
 
-  const items = useUnit(family.$items)
+  const { snapshot, track } = useFamilyRows(
+    family,
+    options?.notifyOnChangeProps,
+    SUSPENSE_GATE,
+  )
+  const items = snapshot.rows as ReadonlyArray<Row & { source: TItem }>
   const qc = useUnit(family.$queryClient)
 
   // Error wins over pending.
@@ -991,16 +1042,12 @@ function useSuspenseQueriesFamily<TItem, TData, TError>(
     )
   }
 
-  return items.map((it) => ({
-    data: it.data as TData,
-    error: it.error,
-    status: 'success' as const,
-    isPending: false as const,
-    isSuccess: true as const,
-    isError: false as const,
-    isFetching: it.isFetching,
-    isPlaceholderData: it.isPlaceholderData,
-    fetchStatus: it.fetchStatus,
-    refresh: () => refreshOne(it.source),
-  }))
+  return items.map((it, i) =>
+    trackedResult(
+      SUSPENSE_TRACKED,
+      (field) => (snapshot.rows[i] ?? it)[field],
+      (field) => track(i, field),
+      { ...SUSPENSE_SUCCESS, refresh: () => refreshOne(it.source) },
+    ),
+  )
 }
