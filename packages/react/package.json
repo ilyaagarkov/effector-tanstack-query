@@ -62,7 +62,7 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:types": "tsc --noEmit",
-    "check:publish": "publint && attw --pack ."
+    "check:publish": "publint && attw --pack . && node ../../scripts/check-dist.mjs"
   },
   "dependencies": {
     "@effector-tanstack-query/core": "workspace:*"

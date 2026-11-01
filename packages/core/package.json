@@ -51,7 +51,7 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:types": "tsc --noEmit && tsup --dts-only --out-dir .type-tests-dist && tsc -p tsconfig.registered.json && node type-tests/check-helper-exports.mjs",
-    "check:publish": "publint && attw --pack ."
+    "check:publish": "publint && attw --pack . && node ../../scripts/check-dist.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
