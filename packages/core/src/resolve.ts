@@ -15,8 +15,10 @@ import type {
 export function resolveQueryArguments<TOptions>(
   args: QueryArguments<TOptions>,
 ): [QueryClient | null, TOptions] {
-  if (args.length === 2) return args
-  return [null, args[0]]
+  // Match the pre-factory contract: an explicit `undefined` second argument
+  // still selects the single-argument form.
+  if (args.length === 2 && args[1] !== undefined) return args
+  return [null, args[0] as TOptions]
 }
 
 export function resolveKey(key: EffectorQueryKey): Store<QueryKey> {
