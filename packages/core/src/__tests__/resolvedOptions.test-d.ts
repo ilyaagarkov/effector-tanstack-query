@@ -2,6 +2,7 @@ import { createStore } from 'effector'
 import { expectTypeOf } from 'vitest'
 import type { QueryKey } from '@tanstack/query-core'
 import { resolveQueryDefinition } from '../resolve'
+import type { ResolvedEnabled } from '../resolve'
 
 const source = createStore(1)
 const definition = resolveQueryDefinition({
@@ -10,21 +11,22 @@ const definition = resolveQueryDefinition({
   enabled: createStore(true),
   refetchInterval: createStore<number | false | undefined>(100),
 })
-const current = definition.$options.getState()
+// Inline options always resolve; only a factory can fail.
+const current = definition.$options.getState()!
 const initial = definition.create(current)
 expectTypeOf(initial.queryKey).toEqualTypeOf<QueryKey>()
-expectTypeOf(initial.enabled).toEqualTypeOf<boolean>()
+expectTypeOf(initial.enabled).toEqualTypeOf<ResolvedEnabled>()
 // The constructor need not include a reactive interval.
 // @ts-expect-error the interval is optional in constructor options
 const requiredInterval: number = initial.refetchInterval
 
-// Native previous options may have a callback; the adapter resolves enabled.
+// Native previous options may have a callback; it is kept for TanStack.
 const updated = definition.update(
   { queryKey: ['previous'], enabled: () => false },
   current,
   false,
 )
-expectTypeOf(updated.enabled).toEqualTypeOf<boolean>()
+expectTypeOf(updated.enabled).toEqualTypeOf<ResolvedEnabled>()
 const fetchOptions = definition.prefetch(current)
 expectTypeOf(fetchOptions.queryKey).toEqualTypeOf<QueryKey>()
 // @ts-expect-error prefetch does not promise an observer enabled setting
@@ -45,5 +47,5 @@ const factory = resolveQueryDefinition({
   query: (id) => ({ queryKey: ['factory', id], queryFn: () => id }),
   refetchInterval: (query) => (query.state.dataUpdatedAt ? 100 : false),
 })
-expectTypeOf(factory.$options.getState().enabled).toEqualTypeOf<boolean>()
+expectTypeOf(factory.$options.getState()!.enabled).toEqualTypeOf<ResolvedEnabled>()
 void requiredInterval

@@ -15,8 +15,10 @@ import type {
 export function resolveQueryArguments<TOptions>(
   args: QueryArguments<TOptions>,
 ): [QueryClient | null, TOptions] {
-  if (args.length === 2) return args
-  return [null, args[0]]
+  // Match the pre-factory contract: an explicit `undefined` second argument
+  // still selects the single-argument form.
+  if (args.length === 2 && args[1] !== undefined) return args
+  return [null, args[0] as TOptions]
 }
 
 export function resolveKey(key: EffectorQueryKey): Store<QueryKey> {
@@ -46,7 +48,13 @@ export function resolveKey(key: EffectorQueryKey): Store<QueryKey> {
 
 type AnyQueryObserverOptions = QueryObserverOptions<any, any, any, any, any>
 
-/** Scoped native options with a resolved key and boolean enabled. */
+/** Native `enabled`: a boolean or TanStack's `(query) => boolean` callback. */
+export type ResolvedEnabled = Exclude<
+  AnyQueryObserverOptions['enabled'],
+  undefined
+>
+
+/** Scoped native options with a resolved key and a defined enabled. */
 export type ResolvedOptions<
   TOptions extends AnyQueryObserverOptions = AnyQueryObserverOptions,
 > = Omit<
@@ -59,7 +67,7 @@ export type ResolvedOptions<
   | 'queryHash'
   | '_defaulted'
 > & {
-  enabled: boolean
+  enabled: ResolvedEnabled
   refetchInterval?: TOptions['refetchInterval'] | number | false
   queryKey: QueryKey
   notifyOnChangeProps?: AnyQueryObserverOptions['notifyOnChangeProps']
@@ -87,6 +95,34 @@ type QueryOptionsInput<TOptions extends AnyQueryObserverOptions> =
       query: (params: any) => TOptions & { queryKey: QueryKey }
     })
 
+/** An exception thrown by a factory's `query` callback. */
+export type FactoryFailure = { error: unknown }
+
+/**
+ * Current options of a query, or the failure that prevented computing them.
+ * Only the factory form can fail; inline options always resolve.
+ */
+export type QueryState<TOptions> =
+  | { options: TOptions; failure: null }
+  | { options: null; failure: FactoryFailure }
+
+/**
+ * Resolves `enabled` the way TanStack does: a callback is evaluated against
+ * the cached query for these options. Only call this from effects — a
+ * callback is user code and may throw.
+ */
+export function isEnabledFor(
+  queryClient: QueryClient,
+  options: { enabled?: ResolvedEnabled; queryKey: QueryKey },
+): boolean {
+  const { enabled } = options
+  if (typeof enabled !== 'function') return enabled !== false
+  const defaulted = queryClient.defaultQueryOptions(
+    options as AnyQueryObserverOptions,
+  )
+  return enabled(queryClient.getQueryCache().build(queryClient, defaulted))
+}
+
 function resolveFactoryOptions<
   TOptions extends AnyQueryObserverOptions,
 >(options: {
@@ -97,11 +133,24 @@ function resolveFactoryOptions<
     | TOptions['refetchInterval']
     | Store<number | false | undefined>
   name?: string
-}): Store<ResolvedOptions<TOptions>> {
+}): Store<QueryState<ResolvedOptions<TOptions>>> {
   const { enabled, refetchInterval, name: _name, ...binding } = options
+  // The factory is user code running inside an effector computation. An
+  // exception escaping it would be swallowed on updates and would leave the
+  // effector kernel in a broken state when thrown while a fork scope lazily
+  // initializes this store. Capture it and surface it as a query error.
+  const runQuery = (
+    params: unknown,
+  ): QueryState<TOptions & { queryKey: QueryKey }> => {
+    try {
+      return { options: binding.query(params), failure: null }
+    } catch (error) {
+      return { options: null, failure: { error } }
+    }
+  }
   const $raw = is.store(binding.source)
-    ? binding.source.map(binding.query)
-    : combine(binding.source, binding.query)
+    ? binding.source.map(runQuery)
+    : combine(binding.source, runQuery)
   const $enabled = is.store(enabled)
     ? enabled
     : createStore(enabled, { skipVoid: false, serialize: 'ignore' })
@@ -109,20 +158,23 @@ function resolveFactoryOptions<
     ? refetchInterval
     : createStore(refetchInterval, { skipVoid: false, serialize: 'ignore' })
   return combine(
-    { options: $raw, enabled: $enabled, interval: $interval },
-    ({ options, enabled, interval }): ResolvedOptions<TOptions> => {
-      const effectiveEnabled = enabled ?? options.enabled ?? true
-      if (typeof effectiveEnabled !== 'boolean') {
-        throw new TypeError(
-          '[@effector-tanstack-query/core] enabled must resolve to a boolean. ' +
-            'Use combine to derive a boolean store, or override factory enabled at the top level.',
-        )
-      }
+    { raw: $raw, enabled: $enabled, interval: $interval },
+    ({ raw, enabled, interval }): QueryState<ResolvedOptions<TOptions>> => {
+      if (raw.failure !== null) return { options: null, failure: raw.failure }
+      const { options } = raw
+      // A defined top-level value overrides the factory; a callback is kept
+      // as is and evaluated by TanStack against the query.
+      const effectiveEnabled: ResolvedEnabled =
+        enabled ?? options.enabled ?? true
       return {
-        ...options,
-        enabled: effectiveEnabled && typeof options.queryFn !== 'symbol',
-        ...(interval !== undefined ? { refetchInterval: interval } : {}),
-        notifyOnChangeProps: 'all',
+        options: {
+          ...options,
+          enabled:
+            typeof options.queryFn === 'symbol' ? false : effectiveEnabled,
+          ...(interval !== undefined ? { refetchInterval: interval } : {}),
+          notifyOnChangeProps: 'all',
+        },
+        failure: null,
       }
     },
   )
@@ -160,11 +212,15 @@ export function resolveQueryDefinition<
   options: QueryOptionsInput<TOptions>,
 ): QueryDefinition<CurrentOptions<TOptions>, PrefetchOptions<TOptions>> {
   if (options.queryKey === undefined) {
-    const $options = resolveFactoryOptions(options)
+    const $state = resolveFactoryOptions(options)
     return {
-      $options,
-      $resolvedKey: $options.map((o) => o.queryKey),
-      $enabled: $options.map((o) => o.enabled),
+      $state,
+      $options: $state.map((state) => state.options),
+      // No key while the factory fails, so refresh cannot target the cache.
+      $resolvedKey: $state.map((state) => state.options?.queryKey ?? null),
+      $enabled: $state.map(
+        (state) => state.options !== null && state.options.enabled !== false,
+      ),
       create: (current: CurrentOptions<TOptions>) => current,
       update: (
         _previous: AnyQueryObserverOptions,
@@ -209,6 +265,7 @@ export function resolveQueryDefinition<
     }),
   )
   return {
+    $state: $options.map((current) => ({ options: current, failure: null })),
     $options,
     $resolvedKey,
     $enabled,
@@ -241,8 +298,12 @@ export interface QueryDefinition<
   TOptions extends ResolvedOptions = ResolvedOptions,
   TFetchOptions = Omit<ResolvedOptions, 'enabled'>,
 > {
-  $options: Store<TOptions>
-  $resolvedKey: Store<QueryKey>
+  /** Options or the factory failure; the source of truth for owners. */
+  $state: Store<QueryState<TOptions>>
+  /** Current options; `null` while a factory fails. */
+  $options: Store<TOptions | null>
+  /** Current key; `null` while a factory fails. */
+  $resolvedKey: Store<QueryKey | null>
   $enabled: Store<boolean>
   create: (current: TOptions) => ResolvedOptions
   update: (

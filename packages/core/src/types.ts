@@ -513,9 +513,9 @@ type FactoryOnly<Options> = {
 }
 
 /**
- * Reuses ordinary options factories. Runtime enabled is boolean; native
- * helper return types also include callback enabled, so a callback value
- * requires a boolean top-level override. Use combine for derived conditions.
+ * Reuses ordinary options factories. The factory may return `enabled` as a
+ * boolean or TanStack's `(query) => boolean` callback. An exception thrown by
+ * `query` becomes the query's error for the current source values.
  */
 export type CreateQueryFactoryOptions<
   TSource extends OptionsSource,

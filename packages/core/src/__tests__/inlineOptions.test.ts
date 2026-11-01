@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { allSettled, createEvent, createStore, fork } from 'effector'
 import { QueryClient } from '@tanstack/query-core'
-import { createQuery, createInfiniteQuery } from '../index'
+import { $queryClient, createQuery, createInfiniteQuery } from '../index'
 
 const clients: QueryClient[] = []
 afterEach(() => {
@@ -264,4 +264,34 @@ describe('infinite inline query options', () => {
     })
     await allSettled(query.unmounted, { scope })
   })
+})
+
+describe('call arguments', () => {
+  // Before factory support, `arg2 === undefined` selected the single-argument
+  // form, so forwarding an optional client as `undefined` kept working.
+  it.each([
+    ['createQuery', () => ({ queryKey: ['args', 'query'], queryFn: () => 1 })],
+    [
+      'createInfiniteQuery',
+      () => ({
+        queryKey: ['args', 'infinite'],
+        queryFn: () => 1,
+        initialPageParam: 0,
+        getNextPageParam: () => undefined,
+      }),
+    ],
+  ] as const)(
+    '%s treats an explicit undefined second argument as the single-argument form',
+    async (name, options) => {
+      const client = new QueryClient()
+      clients.push(client)
+      const factory = (name === 'createQuery' ? createQuery : createInfiniteQuery) as (
+        ...args: unknown[]
+      ) => { $queryClient: unknown; prefetch: unknown }
+      const query = factory({ name: `args.${name}`, ...options() }, undefined)
+      const scope = fork({ values: [[$queryClient, client]] })
+      await allSettled(query.prefetch as never, { scope })
+      expect(client.getQueryData(options().queryKey)).toBeDefined()
+    },
+  )
 })

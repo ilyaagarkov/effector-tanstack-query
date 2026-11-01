@@ -7,7 +7,11 @@ import type {
   QueryKey,
 } from '@tanstack/query-core'
 import { createBaseQuery, sidConfig, warnMissingName } from './createBaseQuery'
-import { resolveQueryArguments, resolveQueryDefinition } from './resolve'
+import {
+  isEnabledFor,
+  resolveQueryArguments,
+  resolveQueryDefinition,
+} from './resolve'
 import type { InfiniteOptions } from './optionsCompat'
 import type {
   CreateInfiniteQueryOptions,
@@ -116,7 +120,7 @@ export function createInfiniteQuery<
     TPageParam
   >
   const definition = resolveQueryDefinition<NativeOptions>(options)
-  type Options = ReturnType<typeof definition.$options.getState>
+  type Options = NonNullable<ReturnType<typeof definition.$options.getState>>
 
   const base = createBaseQuery<
     TData,
@@ -189,7 +193,19 @@ export function createInfiniteQuery<
           },
           // Wire fetchNextPage / fetchPreviousPage as scope-aware effects via
           // attach over $observer — same pattern as the rest of createBaseQuery.
-          setupEffects: ({ $observer }) => {
+          setupEffects: ({ $observer, factoryFailed }) => {
+            // A failing factory has no pages: clear page state with the data.
+            for (const $flag of [
+              $hasNextPage,
+              $hasPreviousPage,
+              $isFetchingNextPage,
+              $isFetchingPreviousPage,
+              $isFetchNextPageError,
+              $isFetchPreviousPageError,
+            ]) {
+              $flag.on(factoryFailed, () => false)
+            }
+
             const fetchNextPageFx = attach({
               source: $observer,
               effect: (observer) => {
@@ -252,11 +268,14 @@ export function createInfiniteQuery<
   const prefetchFx = attach({
     source: {
       qc: base.$queryClient,
-      options: base.$options,
+      state: base.$state,
     },
-    effect: ({ qc, options }) => {
-      if (!qc || !options.enabled) return
-      return qc.fetchInfiniteQuery(definition.prefetch(options))
+    effect: ({ qc, state }) => {
+      if (!qc) return
+      // See createQuery.prefetch: a factory that threw fails the prefetch.
+      if (state.failure) throw state.failure.error
+      if (!isEnabledFor(qc, state.options)) return
+      return qc.fetchInfiniteQuery(definition.prefetch(state.options))
     },
   })
   sample({ clock: prefetch, target: prefetchFx })
@@ -302,6 +321,11 @@ export function createInfiniteQuery<
   Object.defineProperty(result, '__options', {
     enumerable: false,
     value: base.$options,
+  })
+  // Internal: options or the factory failure, so Suspense can throw it.
+  Object.defineProperty(result, '__state', {
+    enumerable: false,
+    value: base.$state,
   })
 
   return result
