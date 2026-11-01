@@ -14,7 +14,8 @@ import type {
   InfiniteOptions,
 } from './optionsCompat'
 
-// Core-only equivalent of the native helper's observer options.
+// Core-only equivalent of the native helper's observer options, minus
+// `notifyOnChangeProps` — re-render filtering is set on the React hooks.
 type UseInfiniteQueryOptions<
   TQueryFnData = unknown,
   TError = DefaultError,
@@ -23,7 +24,7 @@ type UseInfiniteQueryOptions<
   TPageParam = unknown,
 > = Omit<
   InfiniteOptions<TQueryFnData, TError, TData, TQueryKey, TPageParam>,
-  'suspense'
+  'suspense' | 'notifyOnChangeProps'
 >
 
 export type UndefinedInitialDataInfiniteOptions<

@@ -69,7 +69,7 @@ export interface CreateQueryOptions<
     TQueryFnData,
     ResolvedQueryKey<TQueryKey>
   >,
-  'queryKey' | 'enabled' | 'refetchInterval'
+  'queryKey' | 'enabled' | 'refetchInterval' | 'notifyOnChangeProps'
 > {
   queryKey: TQueryKey
   enabled?: StoreOrValue<boolean>
@@ -202,7 +202,7 @@ export interface CreateInfiniteQueryOptions<
     ResolvedQueryKey<TQueryKey>,
     TPageParam
   >,
-  'queryKey' | 'enabled' | 'refetchInterval'
+  'queryKey' | 'enabled' | 'refetchInterval' | 'notifyOnChangeProps'
 > {
   queryKey: TQueryKey
   enabled?: StoreOrValue<boolean>
@@ -374,7 +374,7 @@ export interface CreateQueriesItemOptions<
   TQueryKey extends ReadonlyArray<unknown>,
 > extends Omit<
     QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
-    'queryKey' | 'enabled'
+    'queryKey' | 'enabled' | 'notifyOnChangeProps'
   > {
   queryKey: TQueryKey
   enabled?: boolean
@@ -530,7 +530,7 @@ export type CreateQueryFactoryOptions<
     source: SourceValue<TSource>,
   ) => Omit<
     QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
-    'queryKey'
+    'queryKey' | 'notifyOnChangeProps'
   > & { queryKey: NoInfer<TQueryKey> }
 } & FactoryOverrides<
   QueryObserverOptions<
@@ -556,7 +556,7 @@ export type CreateInfiniteQueryFactoryOptions<
     source: SourceValue<TSource>,
   ) => Omit<
     InfiniteOptions<TQueryFnData, TError, TData, TQueryKey, TPageParam>,
-    'queryKey'
+    'queryKey' | 'notifyOnChangeProps'
   > & { queryKey: NoInfer<TQueryKey> }
 } & FactoryOverrides<
   InfiniteOptions<

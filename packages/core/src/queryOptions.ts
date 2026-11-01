@@ -14,7 +14,8 @@ import type {
   SkipToken,
 } from './optionsCompat'
 
-// Core-only equivalent of the native helper's observer options.
+// Core-only equivalent of the native helper's observer options, minus
+// `notifyOnChangeProps` — re-render filtering is set on the React hooks.
 type UseQueryOptions<
   TQueryFnData = unknown,
   TError = DefaultError,
@@ -22,7 +23,7 @@ type UseQueryOptions<
   TQueryKey extends QueryKey = QueryKey,
 > = Omit<
   QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
-  'suspense'
+  'suspense' | 'notifyOnChangeProps'
 >
 
 export type UndefinedInitialDataOptions<

@@ -8,6 +8,7 @@ import {
   serialize,
 } from 'effector'
 import { QueryClient, skipToken } from '@tanstack/query-core'
+import type { QueryObserverOptions } from '@tanstack/query-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   $queryClient,
@@ -346,18 +347,26 @@ describe('createQuery factory form', () => {
       queries: { notifyOnChangeProps: ['data'], retry: false },
     })
     const data = { id: 1 }
-    const options = Object.freeze(
-      queryOptions({
-        queryKey: ['notifications'],
-        staleTime: Infinity,
-        initialData: data,
-        notifyOnChangeProps: ['data'],
-        queryFn: () =>
-          new Promise<typeof data>((resolve) =>
-            setTimeout(() => resolve(data), 10),
-          ),
-      }),
-    )
+    // Native observer options (e.g. shared with `@tanstack/react-query`
+    // during a migration) may carry `notifyOnChangeProps`; the factory types
+    // only reject it in literals.
+    const native: QueryObserverOptions<
+      typeof data,
+      Error,
+      typeof data,
+      typeof data,
+      string[]
+    > = {
+      queryKey: ['notifications'],
+      staleTime: Infinity,
+      initialData: data,
+      notifyOnChangeProps: ['data'],
+      queryFn: () =>
+        new Promise<typeof data>((resolve) =>
+          setTimeout(() => resolve(data), 10),
+        ),
+    }
+    const options = Object.freeze(native)
     const query = createQuery(client, { source: {}, query: () => options })
     const scope = fork()
     await allSettled(query.mounted, { scope })
