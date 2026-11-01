@@ -52,7 +52,7 @@ Re-renders only when a field the component read changes: a component that reads 
 ```ts
 function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
-  options?: { notifyOnChangeProps?: 'tracked' | 'all' }, // default: 'tracked'
+  options?: { notifyOnChangeProps?: 'tracked' | 'all' | Array<field> }, // default: 'tracked'
 ): UseInfiniteQueryResult<TData, TError>
 ```
 

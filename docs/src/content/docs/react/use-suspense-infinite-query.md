@@ -52,6 +52,6 @@ In addition to all [`useSuspenseQuery`](/effector-tanstack-query/react/use-suspe
 ```ts
 function useSuspenseInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
-  options?: { notifyOnChangeProps?: 'tracked' | 'all' }, // default: 'tracked'
+  options?: { notifyOnChangeProps?: 'tracked' | 'all' | Array<field> }, // default: 'tracked'
 ): UseSuspenseInfiniteQueryResult<TData, TError>
 ```

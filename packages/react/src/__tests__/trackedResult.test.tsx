@@ -25,7 +25,7 @@ import {
   createMutation,
   createQuery,
 } from '@effector-tanstack-query/core'
-import { useInfiniteQuery, useMutation, useQuery } from '..'
+import { useInfiniteQuery, useMutation, useQueries, useQuery } from '..'
 
 describe('useQuery — notifyOnChangeProps', () => {
   let queryClient: QueryClient
@@ -710,6 +710,123 @@ describe('useQuery — notifyOnChangeProps', () => {
         )
         expect(commits).toBe(2)
       })
+    })
+  })
+
+  describe('list of fields', () => {
+    it('re-renders only for the listed fields, even if others are read', async () => {
+      const q = seededQuery('fields.listed')
+
+      function Consumer() {
+        const { data, isFetching } = useQuery(q.query, {
+          notifyOnChangeProps: ['data'],
+        })
+        return (
+          <span>
+            {data?.id} {String(isFetching)}
+          </span>
+        )
+      }
+
+      const { counter, getByText } = renderCounted(<Consumer />, {
+        scope: fork(),
+      })
+      await flush()
+
+      expect(
+        await commitsDuring(counter, () =>
+          backgroundRefetch(q, { data: { id: 1 } }),
+        ),
+      ).toBe(0)
+      expect(
+        await commitsDuring(counter, () =>
+          backgroundRefetch(q, { data: { id: 2 } }),
+        ),
+      ).toBe(1)
+      getByText('2 false')
+    })
+
+    it('re-renders for a listed field the component never reads', async () => {
+      const q = seededQuery('fields.unread')
+
+      function Consumer() {
+        const { data } = useQuery(q.query, {
+          notifyOnChangeProps: ['isFetching'],
+        })
+        return <span>{data?.id}</span>
+      }
+
+      const { counter } = renderCounted(<Consumer />, { scope: fork() })
+      await flush()
+
+      expect(
+        await commitsDuring(counter, () =>
+          backgroundRefetch(q, { data: { id: 1 } }),
+        ),
+      ).toBe(2)
+    })
+
+    it('treats a new array with the same fields as the same setting', async () => {
+      const q = seededQuery('fields.inline')
+      let rerenderParent!: () => void
+      let renders = 0
+
+      function Consumer() {
+        // A fresh literal on every render, alternating the order.
+        const fields: Array<'data' | 'error'> =
+          renders++ % 2 === 0 ? ['data', 'error'] : ['error', 'data']
+        const { data } = useQuery(q.query, { notifyOnChangeProps: fields })
+        return <span>{data?.id}</span>
+      }
+      function Parent() {
+        const [, setTick] = React.useState(0)
+        rerenderParent = () => setTick((t) => t + 1)
+        return <Consumer />
+      }
+
+      const { counter } = renderCounted(<Parent />, { scope: fork() })
+      await flush()
+      for (let i = 0; i < 3; i++) {
+        await act(async () => rerenderParent())
+      }
+      await flush()
+
+      expect(
+        await commitsDuring(counter, () =>
+          backgroundRefetch(q, { data: { id: 1 } }),
+        ),
+      ).toBe(0)
+      expect(q.response.fn).toHaveBeenCalledTimes(1)
+    })
+
+    it('applies to every item of useQueries', async () => {
+      const a = seededQuery('fields.queries.a')
+      const b = seededQuery('fields.queries.b')
+
+      function Consumer() {
+        const results = useQueries([a.query, b.query] as const, {
+          notifyOnChangeProps: ['data'],
+        })
+        return (
+          <span>
+            {results.map((r) => `${r.data?.id}:${r.isFetching}`).join(',')}
+          </span>
+        )
+      }
+
+      const { counter } = renderCounted(<Consumer />, { scope: fork() })
+      await flush()
+
+      expect(
+        await commitsDuring(counter, () =>
+          backgroundRefetch(b, { data: { id: 1 } }),
+        ),
+      ).toBe(0)
+      expect(
+        await commitsDuring(counter, () =>
+          backgroundRefetch(b, { data: { id: 5 } }),
+        ),
+      ).toBe(1)
     })
   })
 })

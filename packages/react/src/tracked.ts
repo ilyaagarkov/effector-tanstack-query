@@ -10,11 +10,23 @@ import type { Scope, Store } from 'effector'
  *     joins the set the first time it's read, during render or later (e.g.
  *     in an event handler), and stays in it.
  *   - `'all'` — any field.
+ *   - a list of fields — only those, whatever the component reads.
  */
-export type NotifyOnChangeProps = 'tracked' | 'all'
+export type NotifyOnChangeProps<TField extends string = string> =
+  | 'tracked'
+  | 'all'
+  | ReadonlyArray<TField>
 
-export interface ResultHookOptions {
-  notifyOnChangeProps?: NotifyOnChangeProps
+/** The data fields of a hook result — everything except its callbacks. */
+export type ResultField<TResult> = {
+  [K in keyof TResult]-?: TResult[K] extends (...args: any[]) => any
+    ? never
+    : K
+}[keyof TResult] &
+  string
+
+export interface ResultHookOptions<TResult = Record<string, unknown>> {
+  notifyOnChangeProps?: NotifyOnChangeProps<ResultField<TResult>>
 }
 
 /** One result's field values, keyed by field name. */
@@ -62,10 +74,18 @@ function useStableDeps(deps: ReadonlyArray<unknown>): ReadonlyArray<unknown> {
   return stable
 }
 
+/** A stable key for the mode: equal lists of fields are the same setting. */
+function modeKey(mode: NotifyOnChangeProps | undefined): string {
+  if (mode === undefined || mode === 'tracked') return 'tracked'
+  if (mode === 'all') return 'all'
+  return `fields:${[...new Set(mode)].sort().join(',')}`
+}
+
 function rowsChanged(
   prev: ReadonlyArray<Row>,
   next: ReadonlyArray<Row>,
-  tracked: ReadonlyArray<Set<string> | undefined> | null,
+  /** Fields that matter for row `i`; `null` — every field. */
+  fieldsFor: ((row: number) => Iterable<string> | undefined) | null,
   always: ReadonlyArray<string>,
   sameRow: TrackedRowsConfig['sameRow'],
 ): boolean {
@@ -75,12 +95,12 @@ function rowsChanged(
     const b = next[i]!
     if (a === b) continue
     if (sameRow && !sameRow(a, b)) return true
-    if (tracked === null) {
+    if (fieldsFor === null) {
       for (const field in b) if (!Object.is(a[field], b[field])) return true
       continue
     }
     for (const field of always) if (!Object.is(a[field], b[field])) return true
-    const fields = tracked[i]
+    const fields = fieldsFor(i)
     if (fields) {
       for (const field of fields) if (!Object.is(a[field], b[field])) return true
     }
@@ -99,7 +119,9 @@ function rowsChanged(
  */
 export function useTrackedRows(config: TrackedRowsConfig): TrackedRows {
   const deps = useStableDeps(config.deps)
-  const mode = config.mode ?? 'tracked'
+  // A list of fields is often a fresh literal each render; compare it by
+  // content so it doesn't re-pin the config (and re-subscribe) every time.
+  const mode = modeKey(config.mode)
   // `read` / `subscribe` close over exactly what `deps` lists, so the config
   // is pinned to them. A render that never commits gets its own closures and
   // can't leak them into the committed subscription.
@@ -118,20 +140,17 @@ export function useTrackedRows(config: TrackedRowsConfig): TrackedRows {
   )
 
   const getSnapshot = React.useCallback((): Snapshot => {
-    const { read, always = [], sameRow } = pinned
+    const { read, always = [], sameRow, mode: setting } = pinned
     const cache = cacheRef.current!
     const rows = read()
     const prev = cache.get(deps)
-    if (
-      prev &&
-      !rowsChanged(
-        prev.rows,
-        rows,
-        mode === 'all' ? null : trackedRef.current,
-        always,
-        sameRow,
-      )
-    ) {
+    const fieldsFor =
+      setting === 'all'
+        ? null
+        : Array.isArray(setting)
+          ? () => setting as ReadonlyArray<string>
+          : (row: number) => trackedRef.current[row]
+    if (prev && !rowsChanged(prev.rows, rows, fieldsFor, always, sameRow)) {
       prev.rows = rows
       return prev
     }

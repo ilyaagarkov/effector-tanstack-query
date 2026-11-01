@@ -232,6 +232,34 @@ describe('useSuspenseQuery — tracked result', () => {
     getByText('id: 5')
   })
 
+  it('still suspends with a list of fields that leaves out status', async () => {
+    const q = seededQuery('suspense.fields.reset')
+
+    function Consumer() {
+      const { data } = useSuspenseQuery(q.query, {
+        notifyOnChangeProps: ['data'],
+      })
+      return <span>id: {data.id}</span>
+    }
+
+    const { getByText } = renderCounted(
+      <Gate>
+        <Consumer />
+      </Gate>,
+      { scope: fork() },
+    )
+    await flush()
+    getByText('id: 1')
+
+    void queryClient.resetQueries({ queryKey: q.key, exact: true })
+    await flush()
+    getByText('loading')
+
+    q.response.last().resolve({ id: 6 })
+    await flush()
+    getByText('id: 6')
+  })
+
   it('skips identical refetches in StrictMode', async () => {
     const q = seededQuery('suspense.tracked.strict')
 

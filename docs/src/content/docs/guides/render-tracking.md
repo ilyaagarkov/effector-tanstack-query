@@ -29,23 +29,36 @@ The set only grows: once a field has been read, changes to it re-render the comp
 
 The Suspense hooks always re-render when a query goes back to `pending` or fails, whatever the component reads — that's how they suspend again or throw to the error boundary.
 
-## Opting out
+## Choosing the fields
 
-Pass `notifyOnChangeProps: 'all'` to re-render on every field, as in 1.x:
+Every result hook accepts `notifyOnChangeProps` in an options object as its last argument:
+
+- `'tracked'` (default) — the fields the component reads.
+- `'all'` — every field, as in 1.x.
+- A list of fields — only those, whatever the component reads.
 
 ```tsx
+// Re-render on every field.
 const result = useQuery(todoQuery, { notifyOnChangeProps: 'all' })
+
+// Re-render on `data` and `error` only — reading `isFetching` here
+// shows its value at the last re-render, without subscribing to it.
+const { data, error } = useQuery(todoQuery, {
+  notifyOnChangeProps: ['data', 'error'],
+})
 ```
 
-Every result hook accepts the same option as its last argument:
+The list is typed to the hook's result fields, without callbacks such as `refresh`. A new array on every render is fine — lists with the same fields are the same setting. In `useQueries` / `useSuspenseQueries` the list applies to every item.
 
 ```ts
-type NotifyOnChangeProps = 'tracked' | 'all' // default: 'tracked'
+type NotifyOnChangeProps<TField> = 'tracked' | 'all' | ReadonlyArray<TField>
 
-interface ResultHookOptions {
-  notifyOnChangeProps?: NotifyOnChangeProps
+interface ResultHookOptions<TResult> {
+  notifyOnChangeProps?: NotifyOnChangeProps<ResultField<TResult>>
 }
 ```
+
+The Suspense hooks re-render on `status` even when the list leaves it out, so they can still suspend or throw.
 
 ## Patterns to watch
 
@@ -109,7 +122,7 @@ The default matches: fields are tracked on first read, the set only grows, and c
 | | `@tanstack/react-query` | effector-tanstack-query |
 | --- | --- | --- |
 | Where the option goes | Query options: `useQuery({ queryKey, notifyOnChangeProps })`, or `QueryClient` `defaultOptions` | Second argument of the hook: `useQuery(query, { notifyOnChangeProps })` |
-| Values | Array of fields, `'all'`, or a function | `'tracked'` (default) or `'all'` |
+| Values | Array of fields, `'all'`, or a function returning one | `'tracked'` (default), `'all'`, or an array of fields — no function form |
 | Global default | Yes, via `defaultOptions` | No — per hook call |
 | `useMutation` | Re-renders on every change | Tracked, like the query hooks |
 | What is filtered | The observer skips notifying its listeners | Only React re-renders; effector stores get every update |

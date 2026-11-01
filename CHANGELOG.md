@@ -18,7 +18,7 @@ Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share 
 
 ### Added
 
-- **`notifyOnChangeProps` option** on every result hook: `'tracked'` (default) or `'all'` to re-render on every field, as in 1.x. Exported types: `NotifyOnChangeProps`, `ResultHookOptions`.
+- **`notifyOnChangeProps` option** on every result hook: `'tracked'` (default), `'all'` to re-render on every field as in 1.x, or a list of fields (`['data', 'error']`) to re-render on those only, whatever the component reads. The list is typed to the hook's result fields. Exported types: `NotifyOnChangeProps`, `ResultHookOptions`, `ResultField`.
 
 ### Migrating
 

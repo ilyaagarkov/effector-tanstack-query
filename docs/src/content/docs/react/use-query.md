@@ -34,7 +34,7 @@ function Component() {
 ```ts
 function useQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
-  options?: { notifyOnChangeProps?: 'tracked' | 'all' }, // default: 'tracked'
+  options?: { notifyOnChangeProps?: 'tracked' | 'all' | Array<field> }, // default: 'tracked'
 ): UseQueryResult<TData, TError>
 
 interface UseQueryResult<TData, TError> {

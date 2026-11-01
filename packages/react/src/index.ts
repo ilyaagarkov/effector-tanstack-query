@@ -37,7 +37,11 @@ import {
 } from './tracked'
 import type { ResultHookOptions, Row, StoreRow } from './tracked'
 
-export type { NotifyOnChangeProps, ResultHookOptions } from './tracked'
+export type {
+  NotifyOnChangeProps,
+  ResultField,
+  ResultHookOptions,
+} from './tracked'
 
 const QUERY_FIELDS = [
   'data',
@@ -138,7 +142,7 @@ export interface UseQueryResult<TData, TError = Error> {
  */
 export function useQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseQueryResult<TData, TError>>,
 ): UseQueryResult<TData, TError> {
   const { snapshot, track } = useStoreRows(
     [storeRow(query, QUERY_FIELDS)],
@@ -196,7 +200,7 @@ export interface UseMutationResult<TData, TError, TVariables> {
  */
 export function useMutation<TData = unknown, TError = Error, TVariables = void>(
   mutation: MutationResult<TData, TError, TVariables>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseMutationResult<TData, TError, TVariables>>,
 ): UseMutationResult<TData, TError, TVariables> {
   const { snapshot, track } = useStoreRows(
     [storeRow(mutation, MUTATION_FIELDS)],
@@ -305,7 +309,7 @@ export interface UseInfiniteQueryResult<TData, TError> {
  */
 export function useInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseInfiniteQueryResult<TData, TError>>,
 ): UseInfiniteQueryResult<TData, TError> {
   const { snapshot, track } = useStoreRows(
     [storeRow(query, INFINITE_QUERY_FIELDS)],
@@ -357,15 +361,15 @@ export type UseQueriesTupleResult<T extends UseQueriesTuple> = {
  */
 export function useQueries<const T extends UseQueriesTuple>(
   queries: T,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseQueryResult<unknown, unknown>>,
 ): UseQueriesTupleResult<T>
 export function useQueries<TItem, TData, TError>(
   family: QueriesResult<TItem, TData, TError>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseQueryResult<TData, TError>>,
 ): ReadonlyArray<UseQueryResult<TData, TError>>
 export function useQueries(
   arg: UseQueriesTuple | QueriesResult<unknown, unknown, unknown>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<any>,
 ): UseQueriesTupleResult<UseQueriesTuple> | ReadonlyArray<UseQueryResult<unknown, unknown>> {
   if (Array.isArray(arg)) {
     return useQueriesTuple(arg, options)
@@ -639,7 +643,7 @@ function noQueryClientError(hook: string): Error {
  */
 export function useSuspenseQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseSuspenseQueryResult<TData, TError>>,
 ): UseSuspenseQueryResult<TData, TError> {
   // Auto-mount lifecycle so concurrent consumers (useUnit / useQuery) reading
   // the same query through the effector scope stay in sync.
@@ -728,7 +732,7 @@ export function useSuspenseInfiniteQuery<
   TPageParam = unknown,
 >(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseSuspenseInfiniteQueryResult<TData, TError>>,
 ): UseSuspenseInfiniteQueryResult<TData, TError> {
   const mount = useUnit(query.mounted)
   const unmount = useUnit(query.unmounted)
@@ -862,15 +866,15 @@ export type UseSuspenseQueriesTupleResult<T extends UseSuspenseQueriesTuple> = {
 
 export function useSuspenseQueries<const T extends UseSuspenseQueriesTuple>(
   queries: T,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseSuspenseQueryResult<unknown, unknown>>,
 ): UseSuspenseQueriesTupleResult<T>
 export function useSuspenseQueries<TItem, TData, TError>(
   family: QueriesResult<TItem, TData, TError>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<UseSuspenseQueryResult<TData, TError>>,
 ): ReadonlyArray<UseSuspenseQueryResult<TData, TError>>
 export function useSuspenseQueries(
   arg: UseSuspenseQueriesTuple | QueriesResult<unknown, unknown, unknown>,
-  options?: ResultHookOptions,
+  options?: ResultHookOptions<any>,
 ):
   | UseSuspenseQueriesTupleResult<UseSuspenseQueriesTuple>
   | ReadonlyArray<UseSuspenseQueryResult<unknown, unknown>> {
