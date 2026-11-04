@@ -1,0 +1,7 @@
+{
+  // Production sources only: CI checks them against every TanStack Query
+  // version in the compat matrix. Type tests need the newest 5.x typings.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "exclude": ["node_modules", "dist", "coverage", "src/__tests__/**"]
+}

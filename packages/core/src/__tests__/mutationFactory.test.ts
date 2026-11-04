@@ -14,6 +14,7 @@ import { QueryClient, onlineManager } from '@tanstack/query-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { $queryClient, createMutation, mutationOptions } from '../index'
 import { sleep } from './test-utils'
+import { tanstackAtLeast } from './tanstackVersion'
 
 type Todo = { id: number; title: string }
 
@@ -191,7 +192,8 @@ describe('createMutation — factory form', () => {
 
   // Native semantics, pinned: a new mutationKey resets the observer, so the
   // pending mutation completes in the cache but no longer reaches the stores.
-  it('in-flight: a mutationKey change resets the observer', async () => {
+  // TanStack Query 5.14.0+: a changed mutationKey resets the MutationObserver.
+  it.skipIf(!tanstackAtLeast('5.14.0'))('in-flight: a mutationKey change resets the observer', async () => {
     const changed = createEvent<number>()
     const $todoId = createStore(1).on(changed, (_, id) => id)
     const success = vi.fn()

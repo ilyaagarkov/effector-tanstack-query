@@ -1,6 +1,11 @@
 import { attach, createEvent, sample } from 'effector'
 import { QueryObserver } from '@tanstack/query-core'
-import type { QueryClient, QueryKey, DefaultError } from '@tanstack/query-core'
+import type {
+  DefaultError,
+  QueryClient,
+  QueryKey,
+  QueryObserverOptions,
+} from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
 import {
   isEnabledFor,
@@ -8,6 +13,15 @@ import {
   resolveQueryDefinition,
 } from './resolve'
 import type { ResolvedOptions } from './resolve'
+
+// Resolved options may carry a callback `enabled`, which Query Core 5.0's
+// observer options don't type (its observers treat any value but false as
+// enabled). The adapter evaluates the callback itself where it needs to.
+function toObserverOptions<TQueryFnData, TError, TData>(
+  options: ResolvedOptions,
+): QueryObserverOptions<TQueryFnData, TError, TData> {
+  return options as unknown as QueryObserverOptions<TQueryFnData, TError, TData>
+}
 import type {
   CreateQueryOptions,
   CreateQueryFactoryOptions,
@@ -71,7 +85,10 @@ export function createQuery<
     { definition, name },
     {
       createObserver: (qc, options) =>
-        new QueryObserver<TQueryFnData, TError, TData>(qc, options),
+        new QueryObserver<TQueryFnData, TError, TData>(
+          qc,
+          toObserverOptions(options),
+        ),
     },
   )
 
@@ -130,7 +147,7 @@ export function createQuery<
     value: (qc: QueryClient, options: ResolvedOptions) =>
       new QueryObserver<TQueryFnData, TError, TData>(
         qc,
-        definition.create(options),
+        toObserverOptions(definition.create(options)),
       ),
   })
   Object.defineProperty(result, '__options', {

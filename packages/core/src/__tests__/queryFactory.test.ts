@@ -16,6 +16,7 @@ import {
   prefetchQueries,
   queryOptions,
 } from '../index'
+import { tanstackAtLeast } from './tanstackVersion'
 
 describe('createQuery factory form', () => {
   let client: QueryClient
@@ -70,7 +71,8 @@ describe('createQuery factory form', () => {
     expect(scope.getState(query.$data)).toEqual({ id: 2, label: 'todo-2' })
   })
 
-  it('updates selection without fetching, then refreshes using the latest same-key queryFn', async () => {
+  // TanStack Query 5.28.0+: a refetch uses the latest observer options.
+  it.skipIf(!tanstackAtLeast('5.28.0'))('updates selection without fetching, then refreshes using the latest same-key queryFn', async () => {
     const changed = createEvent<number>()
     const $factor = createStore(1).on(changed, (_, n) => n)
     const calls: number[] = []
