@@ -394,7 +394,9 @@ export interface CreateQueriesItemOptions<
     QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
     'queryKey' | 'notifyOnChangeProps'
   > {
-  queryKey: TQueryKey
+  // Infer the key from the options' callbacks, not from the extra DataTag
+  // symbols a helper puts on it (Query Core 5.0 rejected tagged keys here).
+  queryKey: NoInfer<TQueryKey>
 }
 
 export interface CreateQueriesOptions<

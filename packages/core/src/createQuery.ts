@@ -14,13 +14,20 @@ import {
 } from './resolve'
 import type { ResolvedOptions } from './resolve'
 
-// Resolved options may carry a callback `enabled`, which Query Core 5.0's
-// observer options don't type (its observers treat any value but false as
-// enabled). The adapter evaluates the callback itself where it needs to.
-function toObserverOptions<TQueryFnData, TError, TData>(
-  options: ResolvedOptions,
-): QueryObserverOptions<TQueryFnData, TError, TData> {
-  return options as unknown as QueryObserverOptions<TQueryFnData, TError, TData>
+// Resolved options may carry a callback `enabled`, which Query Core before
+// 5.48 doesn't type. Only that field is cast; the rest stays checked.
+function toObserverOptions<TQueryFnData, TError, TData>({
+  enabled,
+  ...options
+}: ResolvedOptions): QueryObserverOptions<TQueryFnData, TError, TData> {
+  return {
+    ...options,
+    enabled: enabled as QueryObserverOptions<
+      TQueryFnData,
+      TError,
+      TData
+    >['enabled'],
+  }
 }
 import type {
   CreateQueryOptions,
