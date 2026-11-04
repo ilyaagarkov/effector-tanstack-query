@@ -4,13 +4,13 @@ name: Compat matrix
 # actually build & test, instead of only the single version pinned in the
 # lockfile.
 #
-# Runs the full matrix on schedule, manual dispatch, on master pushes, and on
-# PRs — the latter two only when compat-relevant files change (path filter
-# keeps it off doc/unrelated changes).
+# Runs the full matrix on schedule, manual dispatch, on master / next pushes,
+# and on PRs into them — the latter two only when compat-relevant files change
+# (path filter keeps it off doc/unrelated changes).
 
 on:
   push:
-    branches: [master]
+    branches: [master, next]
     paths:
       - 'packages/react/**'
       - 'examples/**'
@@ -18,7 +18,7 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/compat.yml'
   pull_request:
-    branches: [master]
+    branches: [master, next]
     paths:
       - 'packages/react/**'
       - 'examples/**'
