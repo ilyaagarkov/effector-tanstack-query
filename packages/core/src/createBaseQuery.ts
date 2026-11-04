@@ -20,9 +20,10 @@ import type {
  * Both QueryObserver and InfiniteQueryObserver satisfy this.
  */
 export interface BaseObserverLike<TResult> {
-  // Follows the installed Query Core (queryKey is optional in 5.0).
+  // Follows the installed Query Core (queryKey is optional in 5.0). The
+  // picked fields don't depend on the data types, only on the key.
   options: Pick<
-    QueryObserverOptions<any, any, any, any, any>,
+    QueryObserverOptions<unknown, unknown, unknown, unknown, QueryKey>,
     'queryKey' | '_defaulted' | 'queryHash'
   >
   setOptions(options: any): void
