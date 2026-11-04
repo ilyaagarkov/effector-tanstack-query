@@ -113,9 +113,9 @@ function rowsChanged(
  *
  * `useSyncExternalStore` re-renders when `getSnapshot` returns a new object,
  * so the snapshot is replaced only when a field that matters changed. Other
- * changes still refresh `rows` in place: a render caused by something else
- * (a parent, a tracked field) and a handler reading a field late both see
- * current values, without a commit of their own.
+ * changes still refresh `rows` in place, so a render caused by something
+ * else (a parent, a tracked field) sees current values without a commit of
+ * its own.
  */
 export function useTrackedRows(config: TrackedRowsConfig): TrackedRows {
   const deps = useStableDeps(config.deps)
@@ -228,10 +228,20 @@ export function useStoreRows(
   })
 }
 
+const fieldSets = new WeakMap<ReadonlyArray<string>, ReadonlySet<string>>()
+
+function fieldSet(fields: ReadonlyArray<string>): ReadonlySet<string> {
+  let set = fieldSets.get(fields)
+  if (!set) fieldSets.set(fields, (set = new Set(fields)))
+  return set
+}
+
 /**
- * Builds a result object whose `fields` are enumerable getters that record
- * the read. Spreading it reads — and so tracks — every field. `extras`
- * (callbacks, constants) are plain properties.
+ * Builds the result object, as `@tanstack/react-query` does: a plain object
+ * with this render's values behind a Proxy whose `get` records the read of
+ * a field. Spreading it reads — and so tracks — every field; logging it
+ * shows the values and tracks nothing. `extras` (callbacks, constants)
+ * aren't tracked.
  */
 export function trackedResult<T>(
   fields: ReadonlyArray<string>,
@@ -239,16 +249,14 @@ export function trackedResult<T>(
   track: (field: string) => void,
   extras: object,
 ): T {
-  const result = {} as Record<string, unknown>
-  for (const field of fields) {
-    Object.defineProperty(result, field, {
-      enumerable: true,
-      configurable: true,
-      get() {
-        track(field)
-        return read(field)
-      },
-    })
-  }
-  return Object.assign(result, extras) as T
+  const values: Record<string, unknown> = {}
+  for (const field of fields) values[field] = read(field)
+  Object.assign(values, extras)
+  const tracked = fieldSet(fields)
+  return new Proxy(values, {
+    get(target, key, receiver) {
+      if (typeof key === 'string' && tracked.has(key)) track(key)
+      return Reflect.get(target, key, receiver)
+    },
+  }) as T
 }

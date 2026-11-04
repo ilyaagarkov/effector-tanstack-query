@@ -18,10 +18,10 @@ Tracking only filters React re-renders. The effector stores (`query.$data`, `que
 
 ## How a field gets tracked
 
-The result object exposes its fields as getters. Reading one adds it to the component's tracked set:
+The result is a plain object with the values of the current render, wrapped in a `Proxy` — the same approach as `@tanstack/react-query`. Reading a field adds it to the component's tracked set:
 
 - **During render** — the usual case: destructuring, `result.data`, a conditional `result.isError && result.error`.
-- **Later** — a field first read in an event handler or an effect returns its current value and is tracked from that moment on.
+- **Later** — a field first read in an event handler or an effect returns its value as of the render and is tracked from that moment on.
 
 The set only grows: once a field has been read, changes to it re-render the component until it unmounts.
 
@@ -64,7 +64,7 @@ The Suspense hooks re-render on `status` even when the list leaves it out, so th
 
 ### Relying on the re-render itself
 
-Reads keep working wherever they happen: a field read in a handler or an effect returns its current value and subscribes the component from then on. What changes is the re-render as a signal — a component no longer re-renders for fields nobody read.
+Reads keep working wherever they happen: a field read in a handler or an effect returns its value as of the render and subscribes the component from then on. What changes is the re-render as a signal — a component no longer re-renders for fields nobody read.
 
 ```tsx
 function Page() {
@@ -94,11 +94,11 @@ sample({ clock: todoQuery.finished.success, target: trackRefetchFx })
 
 Render-count assertions in tests (`<Profiler>`, `renderHook`) see fewer renders for the same reason.
 
-A result object kept from an earlier render — in a ref, a timer — keeps returning current values until the component re-renders, then stays at the values of that render. That's React's usual stale-closure rule; take the result from the latest render as you would any other value.
+A result object holds the values of the render that produced it. One kept from an earlier render — in a ref, a timer — shows those values: React's usual stale-closure rule. Take the result from the latest render as you would any other value.
 
 ### Spreading the result
 
-Object rest, `{...result}`, `Object.values` / `Object.entries`, `JSON.stringify(result)` and `structuredClone(result)` read every field, so the component re-renders on all of them:
+Object rest, `{...result}`, `Object.values` / `Object.entries` and `JSON.stringify(result)` read every field, so the component re-renders on all of them:
 
 ```tsx
 const { data, ...rest } = useQuery(todoQuery) // tracks every field
@@ -107,9 +107,11 @@ const { data, ...rest } = useQuery(todoQuery) // tracks every field
 
 That's correct, just without the optimisation. Pass the fields the child needs instead. (`Object.keys` and `for…in` only list the fields and track nothing.)
 
+`structuredClone(result)` throws a `DataCloneError`, as with any `Proxy`. Clone `{ ...result }` instead — which, as above, tracks every field.
+
 ### Logging the result
 
-`console.log(result)` prints `[Getter]` for each field instead of its value, and tracks nothing. Log the fields you need — `console.log(result.data, result.status)` — or spread it while debugging: `console.log({ ...result })` shows every value but, as above, makes the component re-render on every field for as long as the line stays.
+`console.log(result)` prints the values and tracks nothing — logging a result doesn't change what re-renders the component.
 
 ### Family sources made of objects
 
@@ -126,7 +128,6 @@ The default matches: fields are tracked on first read, the set only grows, and c
 | Global default | Yes, via `defaultOptions` | No — per hook call |
 | `useMutation` | Re-renders on every change | Tracked, like the query hooks |
 | What is filtered | The observer skips notifying its listeners | Only React re-renders; effector stores get every update |
-| Reading a field in a handler | The value as of the render | The current value, until the component re-renders |
 | Result fields | ~25 (`dataUpdatedAt`, `isStale`, `refetch`, …) | The fields listed on each hook's page |
 
 Two consequences for migrations:

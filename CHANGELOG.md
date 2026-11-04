@@ -27,7 +27,7 @@ Most components need no change — they read their fields during render and simp
 - **Effects without a dependency list** used as "on any query change" — they ran after each refetch (`isFetching` flipped twice) and now run only when a read field changes. Subscribe to the field (`useEffect(..., [isFetching])`), move the reaction to the model (`sample({ clock: q.finished.success, ... })`), or pass `{ notifyOnChangeProps: 'all' }`.
 - **Render-count assertions** in tests (Profiler, `renderHook`) see fewer renders.
 
-Reads in handlers and effects keep working: a field read there returns its current value and is tracked from then on. Spreading the result (`{...result}`, object rest) and `JSON.stringify(result)` read every field, so those components keep re-rendering on all of them; `console.log(result)` prints `[Getter]` per field — log the fields instead. See [Re-renders and tracked results](https://ilyaagarkov.github.io/effector-tanstack-query/guides/render-tracking/).
+Reads in handlers and effects keep working: a field read there returns its value as of the render and is tracked from then on. Spreading the result (`{...result}`, object rest) and `JSON.stringify(result)` read every field, so those components keep re-rendering on all of them. The result is a `Proxy`, as in `@tanstack/react-query`: `console.log(result)` shows the values without tracking them, and `structuredClone(result)` throws — clone `{ ...result }` instead. See [Re-renders and tracked results](https://ilyaagarkov.github.io/effector-tanstack-query/guides/render-tracking/).
 
 ## [1.0.0] — 2026-08-07
 

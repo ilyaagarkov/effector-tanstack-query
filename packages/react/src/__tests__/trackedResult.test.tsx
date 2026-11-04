@@ -3,6 +3,7 @@
 // default). `'all'` opts back into re-rendering on every field.
 //
 // Counting and fetch-control helpers live in ./tracked-utils.
+import { inspect } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { act, fireEvent, render } from '@testing-library/react'
 import * as React from 'react'
@@ -248,6 +249,27 @@ describe('useQuery — notifyOnChangeProps', () => {
       )
       expect(commits).toBe(1)
       getByText('second')
+    })
+
+    it('shows values when inspected, without tracking them', async () => {
+      const q = seededQuery('tracked.inspect')
+      let printed = ''
+
+      function Consumer() {
+        const result = useQuery(q.query)
+        // What `console.log(result)` prints in Node.
+        printed = inspect(result)
+        return <span>{result.data?.id}</span>
+      }
+
+      const { counter } = renderCounted(<Consumer />, { scope: fork() })
+      await flush()
+      expect(printed).toContain('isFetching: false')
+
+      const commits = await commitsDuring(counter, () =>
+        backgroundRefetch(q, { data: { id: 1 } }),
+      )
+      expect(commits).toBe(0)
     })
 
     it('tracks every field when the result is spread with a rest element', async () => {
