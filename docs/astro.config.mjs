@@ -87,6 +87,10 @@ export default defineConfig({
               ],
             },
             { label: 'Suspense', slug: 'guides/suspense' },
+            {
+              label: 'Re-renders and tracked results',
+              slug: 'guides/render-tracking',
+            },
             { label: 'Naming & SIDs', slug: 'guides/naming-and-sids' },
           ],
         },

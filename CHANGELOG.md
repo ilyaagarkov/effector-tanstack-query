@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows [Kee
 
 Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share this changelog. Per-release version numbers below indicate which package shipped which change; entries for a single package mention the other staying at its previous version.
 
+## [Unreleased]
+
+### Breaking
+
+- **Result hooks re-render only for the fields a component reads** ([#27](https://github.com/ilyaagarkov/effector-tanstack-query/issues/27)) — `@effector-tanstack-query/react`. `useQuery`, `useQueries`, `useInfiniteQuery`, `useMutation`, `useSuspenseQuery`, `useSuspenseQueries` and `useSuspenseInfiniteQuery` used to subscribe to every result store, so a component reading only `data` re-rendered twice on each background refetch (`isFetching` on, then off). They now track the fields read and skip the rest, matching the default of `@tanstack/react-query`.
+
+  Tracking is per item and per field in `useQueries` / `useSuspenseQueries`. The Suspense hooks still always re-render when a query goes back to `pending` or fails, so suspending and error boundaries work whatever the component reads. Effector stores are unaffected: `query.$isFetching` and the rest still receive every update.
+
+- **Suspense hooks keep rendering data when a refetch fails** — `@effector-tanstack-query/react`. `useSuspenseQuery`, `useSuspenseInfiniteQuery` and `useSuspenseQueries` threw every query error to the error boundary, even when the query still had data. Now an error is thrown only when there is no data — `@tanstack/react-query`'s default. After a failed refetch the hook returns the data with `status: 'error'`, `isError: true` and `error` set. `UseSuspenseQueryResult` / `UseSuspenseInfiniteQueryResult` are now unions on `status` (`isError` narrows `error` to `TError`) instead of always `'success'`.
+
+- **`notifyOnChangeProps` removed from factory option types** — `@effector-tanstack-query/core`. `createQuery`, `createInfiniteQuery`, `createQueries` items, `queryOptions` and `infiniteQueryOptions` accepted it, but the observer always forced `'all'` so the model stores stay current, and the value was silently ignored. It's now a type error; set it on the React hook instead. Options objects built elsewhere (e.g. native `@tanstack/react-query` helpers) are still accepted, and the value is still ignored.
+
+### Added
+
+- **`notifyOnChangeProps` option** on every result hook: `'tracked'` (default), `'all'` to re-render on every field as in 1.x, or a list of fields (`['data', 'error']`) to re-render on those only, whatever the component reads. The list is typed to the hook's result fields. Exported types: `NotifyOnChangeProps`, `ResultHookOptions`, `ResultField`.
+
+### Migrating
+
+Most components need no change — they read their fields during render and simply re-render less. Check code that relies on a re-render for a field it doesn't read during render:
+
+- **Effects without a dependency list** used as "on any query change" — they ran after each refetch (`isFetching` flipped twice) and now run only when a read field changes. Subscribe to the field (`useEffect(..., [isFetching])`), move the reaction to the model (`sample({ clock: q.finished.success, ... })`), or pass `{ notifyOnChangeProps: 'all' }`.
+- **Render-count assertions** in tests (Profiler, `renderHook`) see fewer renders.
+
+Reads in handlers and effects keep working: a field read there returns its value as of the render and is tracked from then on. Spreading the result (`{...result}`, object rest) and `JSON.stringify(result)` read every field, so those components keep re-rendering on all of them. The result is a `Proxy`, as in `@tanstack/react-query`: `console.log(result)` shows the values without tracking them, and `structuredClone(result)` throws — clone `{ ...result }` instead. See [Re-renders and tracked results](https://ilyaagarkov.github.io/effector-tanstack-query/guides/render-tracking/).
+
 ## [1.0.0] — 2026-08-07
 
 Stable 1.0. The public API is unchanged from `1.0.0-rc.1`; this release publishes it under the `latest` dist-tag.

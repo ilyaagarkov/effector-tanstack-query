@@ -29,6 +29,8 @@ function Feed() {
 
 Same lifecycle and Suspense semantics as [`useSuspenseQuery`](/effector-tanstack-query/react/use-suspense-query/), but with the infinite-query stores included in the return value.
 
+Past the gate it re-renders only when a field the component read changes: a component that reads only `hasNextPage` doesn't re-render while the next page loads. Pass `{ notifyOnChangeProps: 'all' }` to re-render on every field. See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
+
 ## Return value
 
 In addition to all [`useSuspenseQuery`](/effector-tanstack-query/react/use-suspense-query/#return-value) fields:
@@ -50,5 +52,7 @@ In addition to all [`useSuspenseQuery`](/effector-tanstack-query/react/use-suspe
 ```ts
 function useSuspenseInfiniteQuery<TData, TError = Error, TPageParam = unknown>(
   query: InfiniteQueryResult<TData, TError, TPageParam>,
+  // notifyOnChangeProps: 'tracked' (default) | 'all' | a list of result fields
+  options?: ResultHookOptions<UseSuspenseInfiniteQueryResult<TData, TError>>,
 ): UseSuspenseInfiniteQueryResult<TData, TError>
 ```

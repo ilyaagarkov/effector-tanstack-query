@@ -31,6 +31,8 @@ function createQuery<TQueryFnData, TError = Error, TData = TQueryFnData>(
 | `name`            | `string` (recommended)                                                          | Stable name for SID-based SSR                                                          |
 | ...rest           | All other `QueryObserverOptions`                                                | `staleTime`, `gcTime`, `retry`, `select`, `refetchOnMount`, `refetchOnWindowFocus`, `refetchOnReconnect`, `placeholderData`, `meta`, `networkMode`, ... |
 
+`notifyOnChangeProps` is not an option here. The query's observer always notifies on every change, so the model stores stay current; which changes re-render a component is set on the React hook — `useQuery(query, { notifyOnChangeProps })`, see [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
+
 `EffectorQueryKey`:
 
 ```ts
@@ -136,7 +138,7 @@ query: ({ todoId }: { todoId: number }) => ({
 Factories can return plain options or use compatible native helpers, such as
 `@tanstack/react-query`'s `queryOptions`; our
 [`queryOptions`](/effector-tanstack-query/api/query-options/) is optional.
-Factory observers use `notifyOnChangeProps: 'all'` so model stores stay current.
+A `notifyOnChangeProps` in the returned options — e.g. from a native helper shared with `@tanstack/react-query` — is ignored: the observer always notifies on every change, so model stores stay current.
 `createQuery(queryClient, { source, query })` binds an explicit client.
 If an options object has a defined top-level `queryKey`, the existing inline form takes precedence.
 

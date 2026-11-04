@@ -2,7 +2,10 @@ import { defineConfig } from 'tsup'
 import { esbuildPluginFilePathExtensions } from 'esbuild-plugin-file-path-extensions'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/compat.tsx'],
+  // One entry per source file: the file-path-extensions plugin keeps
+  // internal imports (`./tracked.js`) external, so each target has to be
+  // emitted next to dist/index.js.
+  entry: ['src/index.ts', 'src/compat.tsx', 'src/tracked.ts'],
   format: ['cjs', 'esm'],
   target: ['es2020', 'node18'],
   outDir: 'dist',

@@ -9,8 +9,11 @@ import {
 import {
   useIsFetching,
   useIsMutating,
+  useMutation,
   useQueries,
+  useQuery,
   useSuspenseQueries,
+  useSuspenseQuery,
   type UseQueryResult,
   type UseSuspenseQueryResult,
 } from '..'
@@ -137,6 +140,57 @@ describe('useSuspenseQueries — family overload', () => {
     expectTypeOf<ReturnType<typeof probe>>().toEqualTypeOf<
       ReadonlyArray<UseSuspenseQueryResult<{ id: number }, Error>>
     >()
+  })
+})
+
+describe('UseSuspenseQueryResult — status union', () => {
+  it('narrows error on isError / status', () => {
+    function probe(result: UseSuspenseQueryResult<{ id: number }, Error>) {
+      expectTypeOf(result.data).toEqualTypeOf<{ id: number }>()
+      if (result.isError) {
+        expectTypeOf(result.error).toEqualTypeOf<Error>()
+        expectTypeOf(result.status).toEqualTypeOf<'error'>()
+      } else {
+        expectTypeOf(result.error).toEqualTypeOf<null>()
+        expectTypeOf(result.status).toEqualTypeOf<'success'>()
+      }
+      if (result.status === 'error') {
+        expectTypeOf(result.isSuccess).toEqualTypeOf<false>()
+      }
+    }
+    void probe
+  })
+})
+
+describe('notifyOnChangeProps', () => {
+  it('accepts the result fields of each hook', () => {
+    function probe() {
+      useQuery(userQuery, { notifyOnChangeProps: ['data', 'isFetching'] })
+      useQuery(userQuery, { notifyOnChangeProps: 'all' })
+      useQuery(userQuery, { notifyOnChangeProps: 'tracked' })
+      useSuspenseQuery(userQuery, { notifyOnChangeProps: ['data', 'error'] })
+      useQueries([userQuery, postsQuery] as const, {
+        notifyOnChangeProps: ['data'],
+      })
+      useSuspenseQueries([userQuery, postsQuery] as const, {
+        notifyOnChangeProps: ['data'],
+      })
+    }
+    void probe
+  })
+
+  it('rejects unknown fields and callbacks', () => {
+    function probe(mutation: Parameters<typeof useMutation>[0]) {
+      // @ts-expect-error not a result field
+      useQuery(userQuery, { notifyOnChangeProps: ['nope'] })
+      // @ts-expect-error callbacks don't change
+      useQuery(userQuery, { notifyOnChangeProps: ['refresh'] })
+      // @ts-expect-error a query field, not a mutation one
+      useMutation(mutation, { notifyOnChangeProps: ['isFetching'] })
+      // @ts-expect-error callbacks don't change
+      useMutation(mutation, { notifyOnChangeProps: ['mutate'] })
+    }
+    void probe
   })
 })
 

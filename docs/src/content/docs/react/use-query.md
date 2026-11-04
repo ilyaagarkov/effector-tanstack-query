@@ -24,7 +24,7 @@ function Component() {
 
 ## Behavior
 
-- Subscribes to all relevant stores via `useUnit({ data, error, ... })`.
+- Re-renders only when a field the component read changes — a background refetch that returns the same data doesn't re-render a component that reads only `data`. Pass `{ notifyOnChangeProps: 'all' }` to re-render on every field. See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
 - Calls `query.mounted()` in a `useEffect` on mount.
 - Calls `query.unmounted()` in cleanup on unmount.
 - Returns a flat object — no extra wrappers.
@@ -34,6 +34,8 @@ function Component() {
 ```ts
 function useQuery<TData, TError = Error>(
   query: QueryResult<TData, TError>,
+  // notifyOnChangeProps: 'tracked' (default) | 'all' | a list of result fields
+  options?: ResultHookOptions<UseQueryResult<TData, TError>>,
 ): UseQueryResult<TData, TError>
 
 interface UseQueryResult<TData, TError> {
@@ -52,7 +54,7 @@ interface UseQueryResult<TData, TError> {
 
 ## When to use the low-level pattern instead
 
-For non-React consumers, or when you want full control over the lifecycle:
+When you want full control over the lifecycle, use the stores directly:
 
 ```tsx
 import { useUnit } from 'effector-react'

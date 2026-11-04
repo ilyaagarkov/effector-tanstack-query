@@ -27,7 +27,7 @@ function Component() {
 ## Behavior
 
 - Calls `addTodo.start()` on mount, `addTodo.unmounted()` on cleanup.
-- Subscribes to all state stores.
+- Re-renders only when a field the component read changes — a component that reads only `data` doesn't re-render while the mutation is pending. Pass `{ notifyOnChangeProps: 'all' }` to re-render on every field. See [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
 - Returns bound `mutate(variables)`, `mutateWith(...)`, and `reset()` callbacks.
 
 ## Per-call callbacks via `mutateWith`
@@ -61,6 +61,8 @@ Per-call callbacks fire **in addition to** the observer-level ones set in `creat
 ```ts
 function useMutation<TData = unknown, TError = Error, TVariables = void>(
   mutation: MutationResult<TData, TError, TVariables>,
+  // notifyOnChangeProps: 'tracked' (default) | 'all' | a list of result fields
+  options?: ResultHookOptions<UseMutationResult<TData, TError, TVariables>>,
 ): UseMutationResult<TData, TError, TVariables>
 
 interface UseMutationResult<TData, TError, TVariables> {
