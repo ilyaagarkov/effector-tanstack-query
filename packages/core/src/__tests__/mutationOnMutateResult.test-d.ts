@@ -1,11 +1,12 @@
 // #21: the result of `onMutate` keeps its type through `createMutation` to
-// the per-call callbacks of `mutateWith`, matching upstream nullability —
-// every per-call callback receives `TOnMutateResult | undefined`.
+// the per-call callbacks of `mutateWith`, matching upstream nullability
+// (which varies across 5.x — see ./upstream).
 import { expectTypeOf } from 'vitest'
 import { QueryClient } from '@tanstack/query-core'
 import type { MutationObserverOptions } from '@tanstack/query-core'
 import { createMutation } from '../index'
 import type { MutationResult } from '../index'
+import type { CallRollback } from './upstream'
 
 type Todo = { id: number; title: string }
 type Rollback = { previousTitle: string }
@@ -28,16 +29,16 @@ sync.mutateWith({
   onSuccess: (data, variables, rollback) => {
     expectTypeOf(data).toEqualTypeOf<Todo>()
     expectTypeOf(variables).toEqualTypeOf<{ title: string }>()
-    expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onSuccess'>>()
   },
   onError: (error, _variables, rollback) => {
     expectTypeOf(error).toEqualTypeOf<Error>()
-    expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onError'>>()
   },
   onSettled: (data, error, _variables, rollback) => {
     expectTypeOf(data).toEqualTypeOf<Todo | undefined>()
     expectTypeOf(error).toEqualTypeOf<Error | null>()
-    expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onSettled'>>()
   },
 })
 
@@ -50,7 +51,7 @@ const async = createMutation(client, {
 async.mutateWith({
   variables: 1,
   onError: (_error, _variables, rollback) => {
-    expectTypeOf(rollback).toEqualTypeOf<{ snapshot: number[] } | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<{ snapshot: number[] }, 'onError'>>()
   },
 })
 
@@ -60,7 +61,7 @@ const fromOptions = createMutation(options)
 fromOptions.mutateWith({
   variables: 1,
   onError: (_error, _variables, rollback) => {
-    expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onError'>>()
   },
 })
 

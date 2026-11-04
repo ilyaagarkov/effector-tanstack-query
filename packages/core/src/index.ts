@@ -24,6 +24,11 @@ export type {
 export type {
   CreateInfiniteQueryOptions,
   CreateMutationOptions,
+  CreateMutationFactoryOptions,
+  InferMutationResult,
+  InferMutationTypes,
+  MutationFactoryCheck,
+  MutationFactoryInput,
   CreateQueriesItemOptions,
   CreateQueriesOptions,
   CreateQueryOptions,
@@ -44,6 +49,11 @@ export type {
 
 export { queryOptions } from './queryOptions'
 export { infiniteQueryOptions } from './infiniteQueryOptions'
+export { mutationOptions } from './mutationOptions'
+export type {
+  MutationOptionsWithKey,
+  MutationOptionsWithoutKey,
+} from './mutationOptions'
 
 export type { QueryOptionsWithDataTag } from './optionsCompat'
 export type {

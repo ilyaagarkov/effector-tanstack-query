@@ -1,6 +1,6 @@
 ---
-title: queryOptions / infiniteQueryOptions
-description: Define reusable query options with inferred data types and typed cache keys.
+title: queryOptions / infiniteQueryOptions / mutationOptions
+description: Define reusable query and mutation options with inferred types and typed cache keys.
 ---
 
 These optional helpers return the same options object and associate its key
@@ -51,6 +51,30 @@ export const postsOptions = ({ category }: { category: string }) => infiniteQuer
 `queryFn` supplies the data type; `initialPageParam` supplies the page parameter
 type. The helpers retain native initial-data and skip-token overloads.
 They do not fetch data or create Effector stores.
+
+## mutationOptions
+
+```ts
+import { mutationOptions } from '@effector-tanstack-query/core'
+// or: import { mutationOptions } from '@tanstack/react-query'
+
+export const updateTodoOptions = ({ todoId }: { todoId: number }) =>
+  mutationOptions({
+    mutationKey: ['todos', 'update'],
+    mutationFn: (patch: { title: string }) => patchTodo(todoId, patch),
+    onMutate: async (patch) => ({ previousTitle: patch.title }),
+    onError: (_error, _patch, rollback) => {
+      rollback?.previousTitle // string | undefined
+    },
+  })
+```
+
+`mutationFn` supplies the data and variables types. The `onMutate` result
+types the third argument of the later callbacks. The value `onSuccess` returns
+does not change the data. Called with a `mutationKey`, the helper returns
+`MutationOptionsWithKey`, where the key is required; otherwise it returns
+`MutationOptionsWithoutKey`. Pass a factory built from these options to
+[`createMutation`](/effector-tanstack-query/api/create-mutation/#factory-form).
 
 ## Typed cache access
 

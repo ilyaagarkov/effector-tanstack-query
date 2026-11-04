@@ -2,15 +2,19 @@ import { expectTypeOf } from 'vitest'
 import { createStore } from 'effector'
 import type { Store } from 'effector'
 import type { InfiniteData } from '@tanstack/query-core'
+import type * as ReactQuery from '@tanstack/react-query'
 import {
   queryOptions,
   infiniteQueryOptions,
+  useMutation as useNativeMutation,
   useQuery as useNativeQuery,
 } from '@tanstack/react-query'
 import {
   createQuery,
   createInfiniteQuery,
   createQueries,
+  createMutation,
+  mutationOptions as coreMutationOptions,
   queryOptions as coreQueryOptions,
 } from '@effector-tanstack-query/core'
 import {
@@ -19,7 +23,9 @@ import {
   useInfiniteQuery,
   useQueries,
   useSuspenseQueries,
+  useMutation,
 } from '../index'
+import type { CallRollback } from './upstream'
 
 const $id = createStore(1)
 const options = (id: number) =>
@@ -96,4 +102,45 @@ expectTypeOf<ReturnType<typeof familyProbe>['items'][number]['data']>().toEqualT
 >()
 expectTypeOf<ReturnType<typeof familyProbe>['suspense'][number]['data']>().toEqualTypeOf<
   { id: number; title: string }
+>()
+
+// #22: native mutationOptions factories with a reactive source. The native
+// helper exists since @tanstack/react-query 5.82; older supported versions
+// run the case with the core helper.
+declare const nativeMutationOptions: typeof ReactQuery extends {
+  mutationOptions: infer Native
+}
+  ? Native
+  : typeof coreMutationOptions
+const nativeRename = ({ id }: { id: number }) =>
+  nativeMutationOptions({
+    mutationKey: ['rename', id],
+    mutationFn: async (title: string) => ({ id, title }),
+    onMutate: async (title) => ({ previous: title }),
+  })
+const renameMutation = createMutation({
+  source: { id: $id },
+  mutation: nativeRename,
+})
+function renameProbe() {
+  const { data, mutateWith } = useMutation(renameMutation)
+  expectTypeOf(data).toEqualTypeOf<{ id: number; title: string } | undefined>()
+  mutateWith({
+    variables: 'x',
+    onError: (error, variables, rollback) => {
+      expectTypeOf(error).toEqualTypeOf<Error>()
+      expectTypeOf(variables).toEqualTypeOf<string>()
+      expectTypeOf(rollback).toEqualTypeOf<
+        CallRollback<{ previous: string }, 'onError'>
+      >()
+    },
+  })
+}
+void renameProbe
+// Our helper's output works with the native hook.
+const coreRename = coreMutationOptions({
+  mutationFn: async (title: string) => title,
+})
+expectTypeOf(useNativeMutation(coreRename).data).toEqualTypeOf<
+  string | undefined
 >()

@@ -154,10 +154,8 @@ describe('createMutation — offline / pause behavior', () => {
     // mutationFn paused but onMutate already fired
     expect(count).toBe(0)
     expect(onMutate).toHaveBeenCalledTimes(1)
-    expect(onMutate).toHaveBeenCalledWith(
-      'todo',
-      expect.objectContaining({ client: queryClient }),
-    )
+    // query-core 5.89+ also passes a context ({ client, … }) as 2nd argument.
+    expect(onMutate.mock.calls[0]![0]).toBe('todo')
 
     onlineMock.mockReturnValue(true)
     await act(async () => {

@@ -26,6 +26,43 @@ addTodo.mutate('Buy milk') // trigger the mutation
 
 `addTodo.$status` flows: `'idle'` → `'pending'` → `'success' | 'error'`.
 
+## Reusing mutation options factories
+
+A factory defines mutation options from plain values, so the same definition
+serves native hooks, imperative QueryClient code and Effector:
+
+```ts
+import { createMutation } from '@effector-tanstack-query/core'
+import { useMutation } from '@tanstack/react-query'
+import { updateTodoOptions } from './todos.mo'
+
+// In a native React component:
+function useUpdateTodo(todoId: number) {
+  return useMutation(updateTodoOptions({ todoId }))
+}
+
+// In an Effector model:
+const updateTodo = createMutation({
+  name: 'todo.update',
+  source: { todoId: $todoId },
+  mutation: updateTodoOptions,
+})
+
+sample({ clock: saveClicked, target: updateTodo.mutate })
+```
+
+`source` holds the context (which todo), and `mutate(variables)` sends the
+payload (the patch). A source change applies to the next call. See the
+[factory reference](/effector-tanstack-query/api/create-mutation/#factory-form)
+for how a pending call and a changed `mutationKey` behave, and for typing
+composition.
+
+There are three places to put a callback:
+
+- **Option-level callbacks** (inside the factory) run for every call.
+- **Per-call callbacks** (`mutateWith`) add one-off reactions on top of them.
+- **`finished.success` / `finished.failure`** are for model-level wiring with `sample`.
+
 ## Reacting to outcome with `sample`
 
 For module-level side effects, use the `finished` events. Payload includes both `params` (the variables passed to `mutate`) and `result` / `error`.

@@ -95,6 +95,14 @@ type QueryOptionsInput<TOptions extends AnyQueryObserverOptions> =
       query: (params: any) => TOptions & { queryKey: QueryKey }
     })
 
+/** Maps the plain values of a store or a shallow shape of stores. */
+export function resolveSource<T>(
+  source: OptionsSource,
+  fn: (params: any) => T,
+): Store<T> {
+  return is.store(source) ? source.map(fn) : combine(source, fn)
+}
+
 /** An exception thrown by a factory's `query` callback. */
 export type FactoryFailure = { error: unknown }
 
@@ -148,9 +156,7 @@ function resolveFactoryOptions<
       return { options: null, failure: { error } }
     }
   }
-  const $raw = is.store(binding.source)
-    ? binding.source.map(runQuery)
-    : combine(binding.source, runQuery)
+  const $raw = resolveSource(binding.source, runQuery)
   const $enabled = is.store(enabled)
     ? enabled
     : createStore(enabled, { skipVoid: false, serialize: 'ignore' })

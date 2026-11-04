@@ -24,6 +24,8 @@ Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share 
 
 ### Added
 
+- **Mutation options factories** ([#22](https://github.com/ilyaagarkov/effector-tanstack-query/issues/22)) — `@effector-tanstack-query/core`. `createMutation({ source, mutation })` (with or without an explicit `QueryClient`) reuses an existing mutation options factory with reactive parameters: `source` is a store or a shallow shape of stores, `mutation` receives their plain values. Data, error (including a registered default), variables and the `onMutate` result are inferred from the returned options. Options follow the source the way `useMutation(options(params))` does on re-render: they apply to the next call through `MutationObserver.setOptions`, a pending call gets the new options, and a new `mutationKey` resets the observer. A throwing factory fails the next call with its error. Mixing inline options into the factory form is a type error. The inline form is unchanged. New exports: `mutationOptions` (a typed identity helper that depends only on `@tanstack/query-core`), `CreateMutationFactoryOptions`, `MutationFactoryInput`, `MutationFactoryCheck`, `InferMutationTypes`, `InferMutationResult`, `MutationOptionsWithKey`, `MutationOptionsWithoutKey`.
+
 - **`notifyOnChangeProps` option** on every result hook: `'tracked'` (default), `'all'` to re-render on every field as in 1.x, or a list of fields (`['data', 'error']`) to re-render on those only, whatever the component reads. The list is typed to the hook's result fields. Exported types: `NotifyOnChangeProps`, `ResultHookOptions`, `ResultField`.
 
 ### Migrating
