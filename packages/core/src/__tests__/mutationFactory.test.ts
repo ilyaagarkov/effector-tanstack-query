@@ -191,6 +191,8 @@ describe('createMutation — factory form', () => {
 
   // Native semantics, pinned: a new mutationKey resets the observer, so the
   // pending mutation completes in the cache but no longer reaches the stores.
+  // TanStack added the reset in query-core 5.14.0; earlier 5.x versions only
+  // forward the options (this project tests against the lockfile version).
   it('in-flight: a mutationKey change resets the observer', async () => {
     const changed = createEvent<number>()
     const $todoId = createStore(1).on(changed, (_, id) => id)
