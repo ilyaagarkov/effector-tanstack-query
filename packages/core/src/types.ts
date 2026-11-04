@@ -377,10 +377,12 @@ export interface QueryItemState<TItem, TData, TError = Error> {
  * Per-item query options produced by `createQueries({ query })`. A pure
  * function of one source item — no effector stores, no closures over
  * mutable state. Reactivity comes from the source store; whenever it
- * updates, this callback re-runs to compute fresh options.
+ * updates, this callback re-runs to compute fresh options. Ready-made
+ * `queryOptions` factories fit as is.
  *
- * `enabled` is a plain boolean (not a `Store`) for the same reason —
- * it's derived from the item, so reactivity is already covered.
+ * `enabled` is TanStack's: a boolean or a `(query) => boolean` callback,
+ * not a `Store` — it's derived from the item, so reactivity is already
+ * covered.
  */
 export interface CreateQueriesItemOptions<
   TQueryFnData,
@@ -389,10 +391,9 @@ export interface CreateQueriesItemOptions<
   TQueryKey extends ReadonlyArray<unknown>,
 > extends Omit<
     QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
-    'queryKey' | 'enabled' | 'notifyOnChangeProps'
+    'queryKey' | 'notifyOnChangeProps'
   > {
   queryKey: TQueryKey
-  enabled?: boolean
 }
 
 export interface CreateQueriesOptions<
