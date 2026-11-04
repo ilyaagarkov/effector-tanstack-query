@@ -10,9 +10,16 @@ import {
 import {
   createQuery,
   createInfiniteQuery,
+  createQueries,
   queryOptions as coreQueryOptions,
 } from '@effector-tanstack-query/core'
-import { useQuery, useSuspenseQuery, useInfiniteQuery } from '../index'
+import {
+  useQuery,
+  useSuspenseQuery,
+  useInfiniteQuery,
+  useQueries,
+  useSuspenseQueries,
+} from '../index'
 
 const $id = createStore(1)
 const options = (id: number) =>
@@ -73,4 +80,20 @@ const infinite = createInfiniteQuery({
 })
 expectTypeOf(useInfiniteQuery(infinite).data).toEqualTypeOf<
   number[] | undefined
+>()
+
+// #23: the same native factory feeds a `createQueries` family and its hooks.
+const $ids = createStore([1, 2])
+const family = createQueries({ name: 'native.family', source: $ids, query: options })
+expectTypeOf(family.$data).toEqualTypeOf<
+  Store<ReadonlyArray<{ id: number; title: string } | undefined>>
+>()
+function familyProbe() {
+  return { items: useQueries(family), suspense: useSuspenseQueries(family) }
+}
+expectTypeOf<ReturnType<typeof familyProbe>['items'][number]['data']>().toEqualTypeOf<
+  { id: number; title: string } | undefined
+>()
+expectTypeOf<ReturnType<typeof familyProbe>['suspense'][number]['data']>().toEqualTypeOf<
+  { id: number; title: string }
 >()

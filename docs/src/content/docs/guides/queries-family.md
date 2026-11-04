@@ -29,7 +29,7 @@ export const usersFamily = createQueries({
   query: (id) => ({
     queryKey: ['user', id],
     queryFn: () => fetchUser(id),
-    // `enabled` is a plain boolean — re-runs whenever source changes
+    // A boolean or TanStack's (query) => boolean — re-runs whenever source changes
     enabled: id > 0,
   }),
   // Shared options applied on top of every per-item `query(id)`
@@ -115,7 +115,7 @@ return {
 - **`query` must be pure.** Don't read `Date.now()` or scope state inside it. Reactivity flows through `source`; arbitrary side effects break the diff (same item produces different `queryKey` → new observer every render).
 - **Duplicates in source.** Two equal items produce one observer but two `$items` entries (parallel to source). Intentional in most cases (rendering the same row twice), occasionally surprising. De-dup at the source level if it matters.
 - **Reordering is cheap.** Adding `[1, 2, 3] → [3, 2, 1]` doesn't re-fetch — observers stay keyed by `hashKey(queryKey)`. `$items` just re-projects.
-- **Per-item `enabled`** is a plain `boolean`, not a `Store`. To switch enabledness, update the `source` so `query(item).enabled` evaluates differently — that's the only reactive path.
+- **Per-item `enabled`** is a `boolean` or TanStack's `(query) => boolean` callback, not a `Store`. To switch enabledness reactively, update the `source` so `query(item).enabled` evaluates differently.
 - **`name` is required for SSR.** Without it the `$items` snapshot is silently dropped from `serialize(scope)`.
 
 ## Working example

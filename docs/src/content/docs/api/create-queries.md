@@ -21,10 +21,19 @@ const usersFamily = createQueries({
   query: (id) => ({
     queryKey: ['user', id],
     queryFn: () => fetchUser(id),
-    enabled: id > 0,             // per-item static boolean
+    enabled: id > 0,             // per-item boolean or (query) => boolean
   }),
   staleTime: 60_000,             // shared default for every item
 })
+```
+
+Ready-made options factories fit `query` as is — ours or `@tanstack/react-query`'s `queryOptions`:
+
+```ts
+const userOptions = (id: number) =>
+  queryOptions({ queryKey: ['user', id], queryFn: () => fetchUser(id) })
+
+const usersFamily = createQueries({ name: 'users.list', source: $userIds, query: userOptions })
 ```
 
 ## Options
@@ -33,10 +42,12 @@ const usersFamily = createQueries({
 | ------------ | --------------------------------------------- | ------------------------------------------------------------------ |
 | `name`       | `string` (recommended)                        | Stable name → SID for `$items` so `serialize(scope)` round-trips it |
 | `source`     | `Store<ReadonlyArray<TItem>>`                 | Reactive list. Duplicates collapse observers but appear in `$items` |
-| `query`      | `(item: TItem) => { queryKey, queryFn, enabled? }` | Pure — same item in, same options out. Re-runs on source change   |
+| `query`      | `(item: TItem) => QueryObserverOptions`       | Pure — same item in, same options out. Re-runs on source change. An options factory fits as is |
 | `staleTime`, `gcTime`, `retry`, `retryDelay`, `refetchOn*`, `networkMode` | `QueryObserverOptions` fields | Shared across every observer in the family |
 
-`query(item).enabled` is a plain `boolean` — not a `Store`. Reactivity is already covered by the `source` store: the callback re-runs whenever `source` updates.
+`query(item).enabled` is TanStack's — a `boolean` or a `(query) => boolean` callback evaluated against the cached query — not a `Store`. Reactivity is already covered by the `source` store: the callback re-runs whenever `source` updates. `prefetch` skips items that aren't enabled.
+
+Every item observer notifies on every change so `$items` stays current: a `notifyOnChangeProps` in the `QueryClient`'s defaults or in options built elsewhere doesn't apply to it. Re-render filtering is set on the React hooks — see [Re-renders and tracked results](/effector-tanstack-query/guides/render-tracking/).
 
 ## Return value (`QueriesResult<TItem, TData, TError>`)
 

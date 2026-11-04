@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/query-core'
+import type { QueryObserverOptions } from '@tanstack/query-core'
 import { allSettled, createStore, fork } from 'effector'
-import { $queryClient, createQueries, prefetchQueries } from '..'
+import { $queryClient, createQueries, prefetchQueries, queryOptions } from '..'
 
 describe('createQueries', () => {
   let queryClient: QueryClient
@@ -365,6 +366,117 @@ describe('createQueries', () => {
     const scope = fork()
     await allSettled(family.prefetch, { scope })
     expect(scope.getState(family.$items)[0]?.data).toBe('v1')
+  })
+
+  describe('ready-made options factories (#23)', () => {
+    it('evaluates a callback enabled against the cached query', async () => {
+      const fetchSpy = vi.fn((id: number) => Promise.resolve(`data-${id}`))
+      queryClient.setQueryData(['cb', 1], 'cached-1')
+      const $ids = createStore<number[]>([1, 2])
+      const family = createQueries({
+        name: 'family.enabledCallback',
+        source: $ids,
+        query: (id: number) =>
+          queryOptions({
+            queryKey: ['cb', id],
+            queryFn: () => fetchSpy(id),
+            // Only fetch what isn't cached yet.
+            enabled: (query) => query.state.data === undefined,
+          }),
+      })
+      const scope = fork({ values: [[$queryClient, queryClient]] })
+
+      await allSettled(family.mounted, { scope })
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(fetchSpy.mock.calls.map(([id]) => id)).toEqual([2])
+      expect(scope.getState(family.$data)).toEqual(['cached-1', 'data-2'])
+    })
+
+    it('skips items whose callback enabled is false in prefetch', async () => {
+      const fetchSpy = vi.fn((id: number) => Promise.resolve(`data-${id}`))
+      const $ids = createStore<number[]>([1, 2])
+      const family = createQueries({
+        name: 'family.prefetchEnabledCallback',
+        source: $ids,
+        query: (id: number) =>
+          queryOptions({
+            queryKey: ['cb-prefetch', id],
+            queryFn: () => fetchSpy(id),
+            enabled: () => id !== 1,
+          }),
+      })
+      const scope = fork({ values: [[$queryClient, queryClient]] })
+
+      await allSettled(family.prefetch, { scope })
+
+      expect(fetchSpy.mock.calls.map(([id]) => id)).toEqual([2])
+    })
+
+    it('prefetches the other items when a callback enabled throws', async () => {
+      const fetchSpy = vi.fn((id: number) => Promise.resolve(`data-${id}`))
+      const $ids = createStore<number[]>([1, 2])
+      const family = createQueries({
+        name: 'family.prefetchEnabledThrows',
+        source: $ids,
+        query: (id: number) =>
+          queryOptions({
+            queryKey: ['cb-throws', id],
+            queryFn: () => fetchSpy(id),
+            enabled: () => {
+              if (id === 1) throw new Error('enabled failed')
+              return true
+            },
+          }),
+      })
+      const scope = fork({ values: [[$queryClient, queryClient]] })
+
+      await allSettled(family.prefetch, { scope })
+
+      expect(fetchSpy.mock.calls.map(([id]) => id)).toEqual([2])
+    })
+
+    it.each([
+      ['the client defaults', 'client'],
+      ['options built elsewhere', 'options'],
+    ] as const)(
+      'keeps $items current when %s narrow notifyOnChangeProps',
+      async (_label, where) => {
+        if (where === 'client') {
+          queryClient.setDefaultOptions({
+            queries: { retry: false, notifyOnChangeProps: ['data'] },
+          })
+        }
+        let resolve!: (value: string) => void
+        const $ids = createStore<number[]>([1])
+        queryClient.setQueryData(['notify', 1], 'cached')
+        // A native-like options object: types reject the field in literals,
+        // but objects built elsewhere still carry it.
+        const native: QueryObserverOptions<string, Error, string, string, unknown[]> = {
+          queryKey: ['notify', 1],
+          queryFn: () => new Promise<string>((r) => (resolve = r)),
+          staleTime: Infinity,
+          ...(where === 'options' ? { notifyOnChangeProps: ['data'] as const } : {}),
+        }
+        const family = createQueries({
+          name: `family.notify.${where}`,
+          source: $ids,
+          query: () => native,
+        })
+        const scope = fork({ values: [[$queryClient, queryClient]] })
+        await allSettled(family.mounted, { scope })
+        await vi.advanceTimersByTimeAsync(1)
+        expect(scope.getState(family.$items)[0]?.isFetching).toBe(false)
+
+        void queryClient.refetchQueries({ queryKey: ['notify', 1] })
+        await vi.advanceTimersByTimeAsync(1)
+        expect(scope.getState(family.$items)[0]?.isFetching).toBe(true)
+
+        resolve('cached')
+        await vi.advanceTimersByTimeAsync(1)
+        expect(scope.getState(family.$items)[0]?.isFetching).toBe(false)
+      },
+    )
   })
 
   it('warns when name is missing', () => {

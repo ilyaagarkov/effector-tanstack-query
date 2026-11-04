@@ -10,6 +10,7 @@ import { QueryObserver, hashKey } from '@tanstack/query-core'
 import type { QueryClient } from '@tanstack/query-core'
 import { $queryClient as $globalQueryClient } from './queryClient'
 import { sidConfig, warnMissingName } from './createBaseQuery'
+import { isEnabledFor } from './resolve'
 import type {
   CreateQueriesOptions,
   QueriesResult,
@@ -162,6 +163,10 @@ export function createQueries<
       ...sharedOptions,
       ...itemOpts,
       enabled: itemOpts.enabled ?? true,
+      // `$items` is recomputed from observer notifications. A narrower
+      // `notifyOnChangeProps` — from the client's defaults or from options
+      // built elsewhere — would leave it stale, as for `createQuery`.
+      notifyOnChangeProps: 'all',
     } as ConstructorParameters<typeof QueryObserver<TQueryFnData, TError, TData>>[1]
   }
 
@@ -345,16 +350,15 @@ export function createQueries<
     effect: async ({ qc, currentSource }) => {
       if (!qc) return
       await Promise.all(
-        currentSource.map((item) => {
-          const opts = query(item)
-          if (opts.enabled === false) return Promise.resolve()
-          return qc
-            .fetchQuery({
-              ...sharedOptions,
-              ...opts,
-            } as any)
-            .catch(() => undefined)
-        }),
+        currentSource.map(async (item) => {
+          const opts = { ...sharedOptions, ...query(item) }
+          // A callback `enabled` is user code: if it throws, this item is
+          // skipped like a failed fetch, the others still prefetch.
+          if (!isEnabledFor(qc, opts as Parameters<typeof isEnabledFor>[1])) {
+            return
+          }
+          await qc.fetchQuery(opts as any)
+        }).map((prefetched) => prefetched.catch(() => undefined)),
       )
     },
   })
