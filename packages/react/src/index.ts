@@ -811,7 +811,8 @@ function useSuspenseObserver<
     $queryClient: Store<QueryClient | null>
   },
   TObserver extends {
-    options: { queryKey: unknown }
+    // Optional in Query Core 5.0's observer options.
+    options: { queryKey?: unknown }
     setOptions(options: any): void
     subscribe(cb: () => void): () => void
     getCurrentResult(): object
@@ -937,7 +938,8 @@ function useSuspenseQueriesTuple<T extends UseSuspenseQueriesTuple>(
   if (failed?.failure) throw failed.failure.error
 
   type SuspendableObserver = {
-    options: { queryKey: unknown }
+    // Optional in Query Core 5.0's observer options.
+    options: { queryKey?: unknown }
     subscribe(cb: () => void): () => void
     getCurrentResult(): object
     fetchOptimistic(options: any): Promise<unknown>

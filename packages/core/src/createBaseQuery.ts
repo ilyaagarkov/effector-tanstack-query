@@ -4,6 +4,7 @@ import type {
   FetchStatus,
   QueryClient,
   QueryKey,
+  QueryObserverOptions,
   QueryStatus,
 } from '@tanstack/query-core'
 import { $queryClient } from './queryClient'
@@ -19,7 +20,12 @@ import type {
  * Both QueryObserver and InfiniteQueryObserver satisfy this.
  */
 export interface BaseObserverLike<TResult> {
-  options: { queryKey: QueryKey; _defaulted?: boolean; queryHash?: string }
+  // Follows the installed Query Core (queryKey is optional in 5.0). The
+  // picked fields don't depend on the data types, only on the key.
+  options: Pick<
+    QueryObserverOptions<unknown, unknown, unknown, unknown, QueryKey>,
+    'queryKey' | '_defaulted' | 'queryHash'
+  >
   setOptions(options: any): void
   subscribe(listener: (result: TResult) => void): () => void
   getCurrentResult(): TResult

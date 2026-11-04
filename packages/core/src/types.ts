@@ -1,11 +1,9 @@
-import type { InfiniteOptions, NoInfer } from './optionsCompat'
+import type { InfiniteObserver, InfiniteOptions, NoInfer } from './optionsCompat'
 import type { Event, EventCallable, GetCombinedValue, Store } from 'effector'
 import type {
   DefaultError,
   FetchStatus,
   InfiniteData,
-  InfiniteQueryObserver,
-  InfiniteQueryObserverOptions,
   MutateOptions,
   MutationObserver,
   MutationObserverOptions,
@@ -195,7 +193,7 @@ export interface CreateInfiniteQueryOptions<
   TData = InfiniteData<TQueryFnData, TPageParam>,
   TQueryKey extends EffectorQueryKey = EffectorQueryKey,
 > extends Omit<
-  InfiniteQueryObserverOptions<
+  InfiniteOptions<
     TQueryFnData,
     TError,
     TData,
@@ -208,7 +206,7 @@ export interface CreateInfiniteQueryOptions<
   enabled?: StoreOrValue<boolean>
   /** See {@link CreateQueryOptions.refetchInterval}. */
   refetchInterval?:
-    | InfiniteQueryObserverOptions<
+    | InfiniteOptions<
         TQueryFnData,
         TError,
         TData,
@@ -253,7 +251,7 @@ export interface InfiniteQueryResult<
   unmounted: EventCallable<void>
   /** See {@link QueryResult.$observer}. */
   $observer: Store<
-    InfiniteQueryObserver<any, TError, TData, QueryKey, TPageParam> | null
+    InfiniteObserver<any, TError, TData, QueryKey, TPageParam> | null
   >
   /** See {@link QueryResult.$queryClient}. */
   $queryClient: Store<QueryClient | null>
@@ -396,7 +394,9 @@ export interface CreateQueriesItemOptions<
     QueryObserverOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
     'queryKey' | 'notifyOnChangeProps'
   > {
-  queryKey: TQueryKey
+  // Infer the key from the options' callbacks, not from the extra DataTag
+  // symbols a helper puts on it (Query Core 5.0 rejected tagged keys here).
+  queryKey: NoInfer<TQueryKey>
 }
 
 export interface CreateQueriesOptions<
@@ -586,7 +586,7 @@ export type CreateInfiniteQueryFactoryOptions<
     NoInfer<TPageParam>
   >['refetchInterval']
 > &
-  FactoryOnly<InfiniteQueryObserverOptions>
+  FactoryOnly<InfiniteOptions>
 
 /**
  * Reuses an ordinary mutation options factory. `source` supplies contextual

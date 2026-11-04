@@ -1,6 +1,11 @@
 import { attach, createEvent, sample } from 'effector'
 import { QueryObserver } from '@tanstack/query-core'
-import type { QueryClient, QueryKey, DefaultError } from '@tanstack/query-core'
+import type {
+  DefaultError,
+  QueryClient,
+  QueryKey,
+  QueryObserverOptions,
+} from '@tanstack/query-core'
 import { createBaseQuery, warnMissingName } from './createBaseQuery'
 import {
   isEnabledFor,
@@ -8,6 +13,22 @@ import {
   resolveQueryDefinition,
 } from './resolve'
 import type { ResolvedOptions } from './resolve'
+
+// Resolved options may carry a callback `enabled`, which Query Core before
+// 5.48 doesn't type. Only that field is cast; the rest stays checked.
+function toObserverOptions<TQueryFnData, TError, TData>({
+  enabled,
+  ...options
+}: ResolvedOptions): QueryObserverOptions<TQueryFnData, TError, TData> {
+  return {
+    ...options,
+    enabled: enabled as QueryObserverOptions<
+      TQueryFnData,
+      TError,
+      TData
+    >['enabled'],
+  }
+}
 import type {
   CreateQueryOptions,
   CreateQueryFactoryOptions,
@@ -71,7 +92,10 @@ export function createQuery<
     { definition, name },
     {
       createObserver: (qc, options) =>
-        new QueryObserver<TQueryFnData, TError, TData>(qc, options),
+        new QueryObserver<TQueryFnData, TError, TData>(
+          qc,
+          toObserverOptions(options),
+        ),
     },
   )
 
@@ -130,7 +154,7 @@ export function createQuery<
     value: (qc: QueryClient, options: ResolvedOptions) =>
       new QueryObserver<TQueryFnData, TError, TData>(
         qc,
-        definition.create(options),
+        toObserverOptions(definition.create(options)),
       ),
   })
   Object.defineProperty(result, '__options', {

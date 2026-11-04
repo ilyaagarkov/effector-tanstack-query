@@ -26,6 +26,7 @@ import {
   useSuspenseQueries,
   useSuspenseQuery,
 } from '..'
+import { tanstackAtLeast } from './tanstackVersion'
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -199,7 +200,8 @@ describe('useSuspenseQuery — errors past the gate', () => {
 })
 
 describe('useSuspenseInfiniteQuery — errors past the gate', () => {
-  it('keeps the loaded pages when fetchNextPage fails', async () => {
+  // TanStack Query 5.36.0+: infinite results report isFetchNextPageError.
+  it.skipIf(!tanstackAtLeast('5.36.0'))('keeps the loaded pages when fetchNextPage fails', async () => {
     const key = queryKey()
     const response = controlledFn<number[]>()
     const seed: InfiniteData<number[], number> = {

@@ -14,6 +14,13 @@ for (const file of readdirSync(output)) {
 }
 writeFileSync(path.join(root, 'package.json'), '{"type":"module"}')
 
+function isThirdParty(fileName) {
+  if (!fileName) return false
+  const normalized = fileName.split(path.sep).join('/')
+  return normalized.includes('/node_modules/') &&
+    !normalized.includes('/node_modules/@effector-tanstack-query/core/')
+}
+
 function check(file, options) {
   const program = ts.createProgram([file], {
     strict: true,
@@ -24,7 +31,11 @@ function check(file, options) {
     ...options,
   })
   const emitted = program.emit()
+  // Only our declarations are under test. Some Query Core releases publish
+  // declarations that don't check on their own (5.91.0 and 5.95.0 import
+  // `tsup`), so diagnostics in other packages' files are ignored.
   const diagnostics = [...ts.getPreEmitDiagnostics(program), ...emitted.diagnostics]
+    .filter((diagnostic) => !isThirdParty(diagnostic.file?.fileName))
   if (diagnostics.length) {
     throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
       getCanonicalFileName: file => file,

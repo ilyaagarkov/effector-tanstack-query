@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/query-core'
 import type { QueryObserverOptions } from '@tanstack/query-core'
 import { allSettled, createStore, fork } from 'effector'
 import { $queryClient, createQueries, prefetchQueries, queryOptions } from '..'
+import { tanstackAtLeast } from './tanstackVersion'
 
 describe('createQueries', () => {
   let queryClient: QueryClient
@@ -369,7 +370,8 @@ describe('createQueries', () => {
   })
 
   describe('ready-made options factories (#23)', () => {
-    it('evaluates a callback enabled against the cached query', async () => {
+    // TanStack Query 5.48.0+: observers evaluate a callback `enabled`.
+    it.skipIf(!tanstackAtLeast('5.48.0'))('evaluates a callback enabled against the cached query', async () => {
       const fetchSpy = vi.fn((id: number) => Promise.resolve(`data-${id}`))
       queryClient.setQueryData(['cb', 1], 'cached-1')
       const $ids = createStore<number[]>([1, 2])

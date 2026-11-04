@@ -104,14 +104,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The latest version runs in ci.yml via the lockfile. Versions below
-        # 5.80 don't pass yet (pre-existing); 5.91.0 and 5.95.0 are skipped:
-        # their published declarations import `tsup`.
-        tanstack:
-          - '5.80.0'
-          - '5.89.0' # mutation callbacks gain the context argument
-          - '5.90.1'
-          - '5.99.0'
+        # The latest version runs in ci.yml via the lockfile. The others mark
+        # the 5.x changes the adapter accounts for. Type tests describe the
+        # newest typings, so older versions check the production sources only
+        # (`types: src`); runtime tests skip behavior TanStack added later.
+        include:
+          - { tanstack: '5.0.0', types: src } # peer floor
+          - { tanstack: '5.14.0', types: src } # mutationKey change resets the observer
+          - { tanstack: '5.28.0', types: src } # refetch uses the latest observer options
+          - { tanstack: '5.36.0', types: src } # isFetchNextPageError
+          - { tanstack: '5.48.0', types: src } # callback enabled
+          - { tanstack: '5.80.0', types: full } # infinite observer types drop TQueryData
+          - { tanstack: '5.89.0', types: full } # mutation callbacks gain a context
+          - { tanstack: '5.91.0', types: full } # declarations import `tsup`
+          - { tanstack: '5.99.0', types: full }
 
     steps:
       - uses: actions/checkout@v4
@@ -150,10 +156,12 @@ jobs:
           done
 
       - name: Type check
-        run: pnpm test:types
+        run: pnpm ${{ matrix.types == 'full' && 'test:types' || 'test:types:src' }}
 
       - name: Run tests
-        run: pnpm test
+        run: >-
+          pnpm -r --filter './packages/*' run test
+          ${{ matrix.types == 'full' && ' ' || '--typecheck.enabled=false' }}
 
       - name: Build packages
         run: pnpm build

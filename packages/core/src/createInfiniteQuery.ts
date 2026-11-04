@@ -12,7 +12,7 @@ import {
   resolveQueryArguments,
   resolveQueryDefinition,
 } from './resolve'
-import type { InfiniteOptions } from './optionsCompat'
+import type { InfiniteObserver, InfiniteOptions } from './optionsCompat'
 import type {
   CreateInfiniteQueryOptions,
   CreateInfiniteQueryFactoryOptions,
@@ -22,7 +22,7 @@ import type {
   InfiniteQueryResult,
 } from './types'
 
-type Observer<TQueryFnData, TError, TData, TPageParam> = InfiniteQueryObserver<
+type Observer<TQueryFnData, TError, TData, TPageParam> = InfiniteObserver<
   TQueryFnData,
   TError,
   TData,
@@ -143,13 +143,12 @@ export function createInfiniteQuery<
     { definition, name },
     {
       createObserver: (qc, options) =>
-        new InfiniteQueryObserver<
+        new InfiniteQueryObserver(qc, options as any) as Observer<
           TQueryFnData,
           TError,
           TData,
-          QueryKey,
           TPageParam
-        >(qc, options as any),
+        >,
       setupExtras: () => {
         const hasNextPageUpdated = createEvent<boolean>()
         const hasPreviousPageUpdated = createEvent<boolean>()
@@ -253,8 +252,17 @@ export function createInfiniteQuery<
               dispatchHasPreviousPage(result.hasPreviousPage)
               dispatchIsFetchingNextPage(result.isFetchingNextPage)
               dispatchIsFetchingPreviousPage(result.isFetchingPreviousPage)
-              dispatchIsFetchNextPageError(result.isFetchNextPageError)
-              dispatchIsFetchPreviousPageError(result.isFetchPreviousPageError)
+              // Query Core added these flags after 5.0; older results lack them.
+              const pageErrors = result as {
+                isFetchNextPageError?: boolean
+                isFetchPreviousPageError?: boolean
+              }
+              dispatchIsFetchNextPageError(
+                pageErrors.isFetchNextPageError ?? false,
+              )
+              dispatchIsFetchPreviousPageError(
+                pageErrors.isFetchPreviousPageError ?? false,
+              )
             }
           },
         }
@@ -310,13 +318,10 @@ export function createInfiniteQuery<
   Object.defineProperty(result, '__createObserver', {
     enumerable: false,
     value: (qc: QueryClient, options: Options) =>
-      new InfiniteQueryObserver<
-        TQueryFnData,
-        TError,
-        TData,
-        QueryKey,
-        TPageParam
-      >(qc, definition.create(options) as any),
+      new InfiniteQueryObserver(
+        qc,
+        definition.create(options) as any,
+      ) as Observer<TQueryFnData, TError, TData, TPageParam>,
   })
   Object.defineProperty(result, '__options', {
     enumerable: false,

@@ -7,6 +7,7 @@ import { QueryClient, keepPreviousData } from '@tanstack/query-core'
 import { sleep } from './test-utils'
 import { createInfiniteQuery } from '@effector-tanstack-query/core'
 import type { Scope } from 'effector'
+import { tanstackAtLeast } from './tanstackVersion'
 
 function renderWithScope(scope: Scope, ui: React.ReactElement) {
   const result = render(<Provider value={scope}>{ui}</Provider>)
@@ -190,7 +191,8 @@ describe('createInfiniteQuery (React integration)', () => {
     rendered.getByText('hasNext: false, success: true')
   })
 
-  it('should handle fetchNextPage error', async () => {
+  // TanStack Query 5.36.0+: infinite results report isFetchNextPageError.
+  it.skipIf(!tanstackAtLeast('5.36.0'))('should handle fetchNextPage error', async () => {
     const scope = fork()
 
     const query = createInfiniteQuery<number, Error, number>(queryClient, {

@@ -8,6 +8,7 @@ import {
   prefetchQueries,
   queryOptions,
 } from '../index'
+import { tanstackAtLeast } from './tanstackVersion'
 
 const clients: QueryClient[] = []
 afterEach(() => {
@@ -78,7 +79,8 @@ it('updates options when either independent tuple entry changes', async () => {
   await allSettled(query.unmounted, { scope })
 })
 
-it('updates same-key selection and refreshes with the current tuple closure', async () => {
+// TanStack Query 5.28.0+: a refetch uses the latest observer options.
+it.skipIf(!tanstackAtLeast('5.28.0'))('updates same-key selection and refreshes with the current tuple closure', async () => {
   const client = createClient()
   const changed = createEvent<number>()
   const $factor = createStore(1).on(changed, (_, value) => value)

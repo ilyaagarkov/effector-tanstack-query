@@ -1,6 +1,7 @@
 import { combine, createStore, is } from 'effector'
 import type { Store } from 'effector'
 import type {
+  Query,
   QueryClient,
   QueryKey,
   QueryObserverOptions,
@@ -48,11 +49,13 @@ export function resolveKey(key: EffectorQueryKey): Store<QueryKey> {
 
 type AnyQueryObserverOptions = QueryObserverOptions<any, any, any, any, any>
 
-/** Native `enabled`: a boolean or TanStack's `(query) => boolean` callback. */
-export type ResolvedEnabled = Exclude<
-  AnyQueryObserverOptions['enabled'],
-  undefined
->
+/**
+ * Native `enabled`: a boolean or TanStack's `(query) => boolean` callback.
+ * Spelled out because Query Core 5.0 types `enabled` as boolean only.
+ */
+export type ResolvedEnabled =
+  | boolean
+  | ((query: Query<any, any, any, any>) => boolean)
 
 /** Scoped native options with a resolved key and a defined enabled. */
 export type ResolvedOptions<

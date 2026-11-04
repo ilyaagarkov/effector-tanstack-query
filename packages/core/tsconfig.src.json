@@ -1,0 +1,9 @@
+{
+  // Production sources plus the consumer types that hold on every 5.x:
+  // CI checks them against every TanStack Query version in the compat
+  // matrix. The full type tests need the newest 5.x typings.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "." },
+  "include": ["src/**/*", "type-tests/all-versions.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "src/__tests__/**"]
+}

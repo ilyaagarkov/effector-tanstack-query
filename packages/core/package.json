@@ -50,7 +50,8 @@
     "clean": "rm -rf ./dist ./coverage",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:types": "tsc --noEmit && tsup --dts-only --out-dir .type-tests-dist && tsc -p tsconfig.registered.json && node type-tests/check-helper-exports.mjs",
+    "test:types": "tsc --noEmit && tsc -p tsconfig.src.json && tsup --dts-only --out-dir .type-tests-dist && tsc -p tsconfig.registered.json && node type-tests/check-helper-exports.mjs",
+    "test:types:src": "tsc -p tsconfig.src.json",
     "check:publish": "publint && attw --pack . && node ../../scripts/check-dist.mjs"
   },
   "devDependencies": {

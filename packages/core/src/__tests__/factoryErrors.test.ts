@@ -9,6 +9,7 @@ import {
 import { QueryClient } from '@tanstack/query-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInfiniteQuery, createQuery } from '../index'
+import { tanstackAtLeast } from './tanstackVersion'
 
 // Resolves to 'timeout' instead of hanging the test run.
 function settledWithin(promise: Promise<unknown>, ms = 1000) {
@@ -151,7 +152,8 @@ describe('factory errors', () => {
     expect(other).toHaveBeenCalledTimes(1)
   })
 
-  it('applies an enabled callback that appears after a source update', async () => {
+  // TanStack Query 5.48.0+: observers evaluate a callback `enabled`.
+  it.skipIf(!tanstackAtLeast('5.48.0'))('applies an enabled callback that appears after a source update', async () => {
     const changed = createEvent<number>()
     const $id = createStore(1).on(changed, (_, id) => id)
     const query = createQuery(client, {

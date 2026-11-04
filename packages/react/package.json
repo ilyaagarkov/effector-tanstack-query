@@ -61,7 +61,8 @@
     "clean": "rm -rf ./dist ./coverage",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:types": "tsc --noEmit",
+    "test:types": "tsc --noEmit && tsc -p tsconfig.src.json",
+    "test:types:src": "tsc -p tsconfig.src.json",
     "check:publish": "publint && attw --pack . && node ../../scripts/check-dist.mjs"
   },
   "dependencies": {
