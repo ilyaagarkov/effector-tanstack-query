@@ -37,9 +37,13 @@ npm install \
 | Package           | Required by  | Min version                  |
 | ----------------- | ------------ | ---------------------------- |
 | `effector`        | core, react  | `>= 23.0.0`                  |
-| `@tanstack/query-core` | core    | `>= 5.0.0`                   |
+| `@tanstack/query-core` | core, react | `>= 5.80.0`              |
+| `@tanstack/react-query` | react (optional) | `>= 5.80.0`          |
 | `effector-react`  | react        | `>= 23.0.0`                  |
 | `react`           | react        | `^18.0.0` or `^19.0.0`       |
+
+CI runs the suites against several `@tanstack/query-core` / `@tanstack/react-query`
+versions from 5.80 up to the latest.
 
 ## TypeScript
 

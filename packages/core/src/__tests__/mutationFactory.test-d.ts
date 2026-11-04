@@ -5,6 +5,7 @@ import type { Store } from 'effector'
 import { QueryClient } from '@tanstack/query-core'
 import type { MutationObserverOptions } from '@tanstack/query-core'
 import { createMutation, mutationOptions } from '../index'
+import type { CallRollback, OptionRollback } from './upstream'
 import type {
   CreateMutationFactoryOptions,
   CreateMutationOptions,
@@ -28,6 +29,12 @@ const updateTodoOptions = ({ todoId }: { todoId: number }) =>
     onMutate: async (patch) => ({ previousTitle: patch.title }),
   })
 
+// The upstream comparison types carry the onMutate result itself; only its
+// nullability follows the installed version.
+expectTypeOf<NonNullable<CallRollback<Rollback, 'onSuccess'>>>().toEqualTypeOf<Rollback>()
+expectTypeOf<NonNullable<CallRollback<Rollback, 'onError'>>>().toEqualTypeOf<Rollback>()
+expectTypeOf<NonNullable<OptionRollback<Rollback, 'onSuccess'>>>().toEqualTypeOf<Rollback>()
+
 // --- Inference from a ready-made factory: data, error, variables, rollback.
 const fromShape = createMutation({
   name: 'types.shape',
@@ -42,11 +49,11 @@ fromShape.mutateWith({
   onSuccess: (data, variables, rollback) => {
     expectTypeOf(data).toEqualTypeOf<Todo>()
     expectTypeOf(variables).toEqualTypeOf<Patch>()
-    expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onSuccess'>>()
   },
   onError: (error, _variables, rollback) => {
     expectTypeOf(error).toEqualTypeOf<Error>()
-    expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onError'>>()
   },
 })
 
@@ -123,11 +130,11 @@ const bareAnnotated = createMutation({
     onSuccess: (data, variables, rollback) => {
       expectTypeOf(data).toEqualTypeOf<Todo>()
       expectTypeOf(variables).toEqualTypeOf<string>()
-      expectTypeOf(rollback).toEqualTypeOf<Rollback>()
+      expectTypeOf(rollback).toEqualTypeOf<OptionRollback<Rollback, 'onSuccess'>>()
     },
     onError: (error, _variables, rollback) => {
       expectTypeOf(error).toEqualTypeOf<Error>()
-      expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+      expectTypeOf(rollback).toEqualTypeOf<OptionRollback<Rollback, 'onError'>>()
     },
   }),
 })
@@ -177,14 +184,13 @@ const composed = createMutation({
   mutation: (params) =>
     mutationOptions({
       ...updateTodoOptions(params),
-      // Option-level onSuccess runs after onMutate: no undefined (upstream).
       onSuccess: (data, variables, rollback) => {
         expectTypeOf(data).toEqualTypeOf<Todo>()
         expectTypeOf(variables).toEqualTypeOf<Patch>()
-        expectTypeOf(rollback).toEqualTypeOf<Rollback>()
+        expectTypeOf(rollback).toEqualTypeOf<OptionRollback<Rollback, 'onSuccess'>>()
       },
       onError: (_error, _variables, rollback) => {
-        expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+        expectTypeOf(rollback).toEqualTypeOf<OptionRollback<Rollback, 'onError'>>()
       },
     }),
 })
@@ -192,13 +198,14 @@ expectTypeOf(composed).toEqualTypeOf<
   MutationResult<Todo, Error, Patch, Rollback>
 >()
 
-// --- onSuccess' return value does not transform data.
+// --- onSuccess does not transform data (older 5.x also require it to
+// return void, so the callback returns nothing here).
 const returning = createMutation({
   source: $todoId,
   mutation: (id) =>
     mutationOptions({
       mutationFn: async (): Promise<Todo> => ({ id, title: '' }),
-      onSuccess: () => 'ignored',
+      onSuccess: () => {},
     }),
 })
 expectTypeOf(returning.$data).toEqualTypeOf<Store<Todo | undefined>>()

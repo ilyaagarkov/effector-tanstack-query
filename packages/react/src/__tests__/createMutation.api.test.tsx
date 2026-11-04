@@ -262,12 +262,12 @@ describe('createMutation — mutateWith per-call callbacks', () => {
 
     expect(observerOnSuccess).toHaveBeenCalledTimes(1)
     expect(perCallOnSuccess).toHaveBeenCalledTimes(1)
-    expect(perCallOnSuccess).toHaveBeenCalledWith(
+    // query-core 5.89+ also passes a context ({ client, … }) as 4th argument.
+    expect(perCallOnSuccess.mock.calls[0]!.slice(0, 3)).toEqual([
       'HELLO',
       'hello',
       undefined,
-      expect.objectContaining({ client: queryClient }),
-    )
+    ])
   })
 
   it('should run per-call onError when the mutation rejects', async () => {

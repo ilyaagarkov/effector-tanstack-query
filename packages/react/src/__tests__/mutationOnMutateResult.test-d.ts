@@ -1,13 +1,25 @@
 // #21: the `onMutate` result keeps its type from `createMutation` through
 // `useMutation` to the per-call callbacks of `mutateWith`.
 import { describe, expectTypeOf, it } from 'vitest'
-import { mutationOptions } from '@tanstack/react-query'
-import { createMutation } from '@effector-tanstack-query/core'
+import type * as ReactQuery from '@tanstack/react-query'
+import {
+  createMutation,
+  mutationOptions as coreMutationOptions,
+} from '@effector-tanstack-query/core'
+import type { CallRollback } from './upstream'
 import { useMutation } from '..'
 import type { UseMutationResult } from '..'
 
 type Todo = { id: number; title: string }
 type Rollback = { previousTitle: string }
+
+// Native mutationOptions exists since @tanstack/react-query 5.82; on older
+// supported versions the interop case runs with the core helper instead.
+declare const mutationOptions: typeof ReactQuery extends {
+  mutationOptions: infer Native
+}
+  ? Native
+  : typeof coreMutationOptions
 
 const updateTodo = createMutation({
   name: 'react.onMutate',
@@ -25,13 +37,13 @@ describe('useMutation — onMutate result', () => {
       mutateWith({
         variables: { title: 'new' },
         onSuccess: (_data, _variables, rollback) => {
-          expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+          expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onSuccess'>>()
         },
         onError: (_error, _variables, rollback) => {
-          expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+          expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onError'>>()
         },
         onSettled: (_data, _error, _variables, rollback) => {
-          expectTypeOf(rollback).toEqualTypeOf<Rollback | undefined>()
+          expectTypeOf(rollback).toEqualTypeOf<CallRollback<Rollback, 'onSettled'>>()
         },
       })
     }
@@ -49,7 +61,7 @@ describe('useMutation — onMutate result', () => {
         variables: 1,
         onError: (_error, _variables, rollback) => {
           expectTypeOf(rollback).toEqualTypeOf<
-            { snapshot: number[] } | undefined
+            CallRollback<{ snapshot: number[] }, 'onError'>
           >()
         },
       })

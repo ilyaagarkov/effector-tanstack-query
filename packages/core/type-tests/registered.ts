@@ -9,6 +9,7 @@ import {
   createMutation,
   mutationOptions,
 } from '../.type-tests-dist/index'
+import type { CallRollback } from '../src/__tests__/upstream'
 
 class ApplicationError extends Error {
   kind = 'application'
@@ -94,7 +95,9 @@ nestedMutation.mutateWith({
   variables: 'x',
   onError: (error, _variables, rollback) => {
     expectTypeOf(error).toEqualTypeOf<ApplicationError>()
-    expectTypeOf(rollback).toEqualTypeOf<{ previous: string } | undefined>()
+    expectTypeOf(rollback).toEqualTypeOf<
+      CallRollback<{ previous: string }, 'onError'>
+    >()
   },
 })
 // The legacy inline mutation keeps its Error default.

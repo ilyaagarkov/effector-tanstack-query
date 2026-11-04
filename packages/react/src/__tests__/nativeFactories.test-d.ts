@@ -2,10 +2,10 @@ import { expectTypeOf } from 'vitest'
 import { createStore } from 'effector'
 import type { Store } from 'effector'
 import type { InfiniteData } from '@tanstack/query-core'
+import type * as ReactQuery from '@tanstack/react-query'
 import {
   queryOptions,
   infiniteQueryOptions,
-  mutationOptions as nativeMutationOptions,
   useMutation as useNativeMutation,
   useQuery as useNativeQuery,
 } from '@tanstack/react-query'
@@ -25,6 +25,7 @@ import {
   useSuspenseQueries,
   useMutation,
 } from '../index'
+import type { CallRollback } from './upstream'
 
 const $id = createStore(1)
 const options = (id: number) =>
@@ -103,7 +104,14 @@ expectTypeOf<ReturnType<typeof familyProbe>['suspense'][number]['data']>().toEqu
   { id: number; title: string }
 >()
 
-// #22: native mutationOptions factories with a reactive source.
+// #22: native mutationOptions factories with a reactive source. The native
+// helper exists since @tanstack/react-query 5.82; older supported versions
+// run the case with the core helper.
+declare const nativeMutationOptions: typeof ReactQuery extends {
+  mutationOptions: infer Native
+}
+  ? Native
+  : typeof coreMutationOptions
 const nativeRename = ({ id }: { id: number }) =>
   nativeMutationOptions({
     mutationKey: ['rename', id],
@@ -122,7 +130,9 @@ function renameProbe() {
     onError: (error, variables, rollback) => {
       expectTypeOf(error).toEqualTypeOf<Error>()
       expectTypeOf(variables).toEqualTypeOf<string>()
-      expectTypeOf(rollback).toEqualTypeOf<{ previous: string } | undefined>()
+      expectTypeOf(rollback).toEqualTypeOf<
+        CallRollback<{ previous: string }, 'onError'>
+      >()
     },
   })
 }

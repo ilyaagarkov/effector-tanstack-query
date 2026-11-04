@@ -83,11 +83,10 @@ behaves when a component re-renders:
   new options, so the option-level `onSuccess` / `onError` / `onSettled`
   that run when it finishes come from the new source. To keep the old values,
   read them from `variables` or from the `onMutate` result.
-- **A changed `mutationKey`** resets the observer on TanStack Query 5.14 and
-  later. The pending call still finishes in the `MutationCache`, but it no
-  longer reaches `$status` / `$data` or `finished`. Earlier 5.x versions
-  forward the new options without a reset. Keep the key stable and pass the
-  changing parameter through `source`.
+- **A changed `mutationKey`** resets the observer. The pending call still
+  finishes in the `MutationCache`, but it no longer reaches `$status` /
+  `$data` or `finished`. Keep the key stable and pass the changing parameter
+  through `source`.
 - **Concurrent calls** behave as in the inline form: the stores and `finished`
   follow the latest call.
 
