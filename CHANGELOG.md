@@ -8,8 +8,6 @@ Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share 
 
 ### Breaking
 
-- **TanStack Query 5.80 or later is required** — both packages. The peer range of `@tanstack/query-core` (and `@tanstack/react-query` for `@effector-tanstack-query/react`) is now `^5.80.0` instead of `^5.0.0`. The 1.x code already relied on 5.80+: below it, `createInfiniteQuery` declarations don't type-check against Query Core's infinite observer generics, `isFetchNextPageError` / `isFetchPreviousPageError` are missing, and a callback `enabled` isn't supported. CI now runs the suites against several 5.x versions from 5.80 up, so the range is checked rather than assumed.
-
 - **Result hooks re-render only for the fields a component reads** ([#27](https://github.com/ilyaagarkov/effector-tanstack-query/issues/27)) — `@effector-tanstack-query/react`. `useQuery`, `useQueries`, `useInfiniteQuery`, `useMutation`, `useSuspenseQuery`, `useSuspenseQueries` and `useSuspenseInfiniteQuery` used to subscribe to every result store, so a component reading only `data` re-rendered twice on each background refetch (`isFetching` on, then off). They now track the fields read and skip the rest, matching the default of `@tanstack/react-query`.
 
   Tracking is per item and per field in `useQueries` / `useSuspenseQueries`. The Suspense hooks still always re-render when a query goes back to `pending` or fails, so suspending and error boundaries work whatever the component reads. Effector stores are unaffected: `query.$isFetching` and the rest still receive every update.

@@ -59,7 +59,7 @@
     "publint": "^0.3.21"
   },
   "peerDependencies": {
-    "@tanstack/query-core": "^5.80.0",
+    "@tanstack/query-core": "^5.0.0",
     "effector": ">=23.0.0"
   }
 }
