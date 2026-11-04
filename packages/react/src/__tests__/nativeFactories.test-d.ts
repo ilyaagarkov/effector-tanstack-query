@@ -5,12 +5,16 @@ import type { InfiniteData } from '@tanstack/query-core'
 import {
   queryOptions,
   infiniteQueryOptions,
+  mutationOptions as nativeMutationOptions,
+  useMutation as useNativeMutation,
   useQuery as useNativeQuery,
 } from '@tanstack/react-query'
 import {
   createQuery,
   createInfiniteQuery,
   createQueries,
+  createMutation,
+  mutationOptions as coreMutationOptions,
   queryOptions as coreQueryOptions,
 } from '@effector-tanstack-query/core'
 import {
@@ -19,6 +23,7 @@ import {
   useInfiniteQuery,
   useQueries,
   useSuspenseQueries,
+  useMutation,
 } from '../index'
 
 const $id = createStore(1)
@@ -96,4 +101,36 @@ expectTypeOf<ReturnType<typeof familyProbe>['items'][number]['data']>().toEqualT
 >()
 expectTypeOf<ReturnType<typeof familyProbe>['suspense'][number]['data']>().toEqualTypeOf<
   { id: number; title: string }
+>()
+
+// #22: native mutationOptions factories with a reactive source.
+const nativeRename = ({ id }: { id: number }) =>
+  nativeMutationOptions({
+    mutationKey: ['rename', id],
+    mutationFn: async (title: string) => ({ id, title }),
+    onMutate: async (title) => ({ previous: title }),
+  })
+const renameMutation = createMutation({
+  source: { id: $id },
+  mutation: nativeRename,
+})
+function renameProbe() {
+  const { data, mutateWith } = useMutation(renameMutation)
+  expectTypeOf(data).toEqualTypeOf<{ id: number; title: string } | undefined>()
+  mutateWith({
+    variables: 'x',
+    onError: (error, variables, rollback) => {
+      expectTypeOf(error).toEqualTypeOf<Error>()
+      expectTypeOf(variables).toEqualTypeOf<string>()
+      expectTypeOf(rollback).toEqualTypeOf<{ previous: string } | undefined>()
+    },
+  })
+}
+void renameProbe
+// Our helper's output works with the native hook.
+const coreRename = coreMutationOptions({
+  mutationFn: async (title: string) => title,
+})
+expectTypeOf(useNativeMutation(coreRename).data).toEqualTypeOf<
+  string | undefined
 >()

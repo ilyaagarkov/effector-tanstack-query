@@ -6,6 +6,8 @@ import {
   createInfiniteQuery,
   queryOptions,
   infiniteQueryOptions,
+  createMutation,
+  mutationOptions,
 } from '../.type-tests-dist/index'
 
 class ApplicationError extends Error {
@@ -65,3 +67,36 @@ const legacyKey: import('../.type-tests-dist/index').EffectorQueryKey = [
   $id,
 ]
 void legacyKey
+
+// #22: mutation factories follow the registered default error, including a
+// nested helper with a spread (which inferred `null` in an early prototype).
+const baseMutation = (id: number) =>
+  mutationOptions({
+    mutationKey: ['todo', id],
+    mutationFn: async (title: string) => ({ id, title }),
+  })
+const factoryMutation = createMutation({ source: $id, mutation: baseMutation })
+expectTypeOf(factoryMutation.$error).toEqualTypeOf<
+  Store<ApplicationError | null>
+>()
+const nestedMutation = createMutation({
+  source: $id,
+  mutation: (id) =>
+    mutationOptions({
+      ...baseMutation(id),
+      onMutate: async (title) => ({ previous: title }),
+    }),
+})
+expectTypeOf(nestedMutation.$error).toEqualTypeOf<
+  Store<ApplicationError | null>
+>()
+nestedMutation.mutateWith({
+  variables: 'x',
+  onError: (error, _variables, rollback) => {
+    expectTypeOf(error).toEqualTypeOf<ApplicationError>()
+    expectTypeOf(rollback).toEqualTypeOf<{ previous: string } | undefined>()
+  },
+})
+// The legacy inline mutation keeps its Error default.
+const inlineMutation = createMutation({ mutationFn: async (n: number) => n })
+expectTypeOf(inlineMutation.$error).toEqualTypeOf<Store<Error | null>>()

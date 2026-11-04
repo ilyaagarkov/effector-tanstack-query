@@ -4,6 +4,8 @@ import {
   createInfiniteQuery,
   queryOptions,
   infiniteQueryOptions,
+  createMutation,
+  mutationOptions,
 } from '@effector-tanstack-query/core'
 import type { SourceValue } from '@effector-tanstack-query/core'
 import type { Store } from 'effector'
@@ -55,3 +57,11 @@ export const tupleSourcePages = (id: Store<number>, filter: Store<string>) =>
     }),
   })
 export type SourceSnapshot = SourceValue<readonly [Store<number>, Store<string>]>
+
+export const renameOptions = ({ id }: { id: number }) => mutationOptions({
+  mutationKey: ['rename', id] as const,
+  mutationFn: async (title: string) => ({ id, title }),
+  onMutate: async (title) => ({ previous: title }),
+})
+export const renameMutation = (id: Store<number>) =>
+  createMutation({ source: { id }, mutation: renameOptions })

@@ -7,17 +7,66 @@ import {
 } from 'effector'
 import type { Store } from 'effector'
 import { MutationObserver } from '@tanstack/query-core'
-import type { QueryClient } from '@tanstack/query-core'
+import type {
+  DefaultError,
+  MutationObserverOptions,
+  QueryClient,
+} from '@tanstack/query-core'
 import { $queryClient } from './queryClient'
 import { sidConfig, warnMissingName } from './createBaseQuery'
+import { resolveQueryArguments, resolveSource } from './resolve'
+import type { NoInfer } from './optionsCompat'
 import type {
+  CreateMutationFactoryOptions,
   CreateMutationOptions,
+  InferMutationResult,
   MutateWithParams,
+  MutationFactoryCheck,
+  MutationFactoryInput,
   MutationResult,
+  OptionsSource,
+  QueryArguments,
 } from './types'
 
 type MutationStatus = 'idle' | 'pending' | 'success' | 'error'
+type MutationInput<TData, TError, TVariables, TOnMutateResult> =
+  | CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>
+  | CreateMutationFactoryOptions<
+      any,
+      TData,
+      TError,
+      TVariables,
+      TOnMutateResult
+    >
 
+// Overload order matters. The first captures the returned options, so nested
+// helper results keep their own types (a contextual return type made a
+// helper's error `null`). It rejects bare objects whose callbacks it can't
+// type; the second, contextually typed overload takes those and also serves
+// explicit generics. See MutationFactoryCheck.
+export function createMutation<TOptions, TSource extends OptionsSource>(
+  ...args: QueryArguments<
+    MutationFactoryInput<TSource, TOptions> &
+      NoInfer<MutationFactoryCheck<TOptions>>
+  >
+): InferMutationResult<TOptions>
+export function createMutation<
+  TData = unknown,
+  TError = DefaultError,
+  TVariables = void,
+  TOnMutateResult = unknown,
+  TSource extends OptionsSource = OptionsSource,
+>(
+  ...args: QueryArguments<
+    CreateMutationFactoryOptions<
+      TSource,
+      TData,
+      TError,
+      TVariables,
+      TOnMutateResult
+    >
+  >
+): MutationResult<TData, TError, TVariables, TOnMutateResult>
 export function createMutation<
   TData = unknown,
   TError = Error,
@@ -28,17 +77,39 @@ export function createMutation<
     | QueryClient
     | CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
   arg2?: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
+): MutationResult<TData, TError, TVariables, TOnMutateResult>
+export function createMutation<
+  TData = unknown,
+  TError = Error,
+  TVariables = void,
+  TOnMutateResult = unknown,
+>(
+  ...args: [
+    QueryClient | MutationInput<TData, TError, TVariables, TOnMutateResult>,
+    MutationInput<TData, TError, TVariables, TOnMutateResult>?,
+  ]
 ): MutationResult<TData, TError, TVariables, TOnMutateResult> {
-  const [explicitClient, options] = parseMutationArgs<
+  type Options = MutationObserverOptions<
     TData,
     TError,
     TVariables,
     TOnMutateResult
-  >(arg1, arg2)
-
-  const { name, ...observerOptions } = options
+  >
+  const [explicitClient, options] = resolveQueryArguments(
+    args as QueryArguments<
+      MutationInput<TData, TError, TVariables, TOnMutateResult>
+    >,
+  )
+  const { name, ...inlineOptions } = options
 
   if (!name) warnMissingName('createMutation')
+
+  // Factory form: options follow the source and are applied to the observer
+  // on every change. Inline form: options are captured once, as before.
+  const isFactory = typeof options.mutation === 'function'
+  const $options: Store<Options> = isFactory
+    ? resolveMutationFactory<Options>(options.source, options.mutation)
+    : createStore(inlineOptions as Options, { serialize: 'ignore' })
 
   const $effectiveClient: Store<QueryClient | null> = explicitClient
     ? createStore(explicitClient as QueryClient | null, {
@@ -95,8 +166,12 @@ export function createMutation<
   const unmounted = createEvent<void>()
 
   const startFx = attach({
-    source: { qc: $effectiveClient, observer: $observer },
-    effect: ({ qc, observer: existingObserver }) => {
+    source: {
+      qc: $effectiveClient,
+      observer: $observer,
+      options: $options,
+    },
+    effect: ({ qc, observer: existingObserver, options: observerOptions }) => {
       if (!qc) {
         throw new Error(
           '[@tanstack/query-effector] No QueryClient is set for createMutation. Call setQueryClient(qc) before start, ' +
@@ -173,6 +248,18 @@ export function createMutation<
   })
   sample({ clock: unmounted, target: unmountFx })
 
+  if (isFactory) {
+    // Like useMutation(options) on re-render: a pending mutation receives
+    // the new options and a new mutationKey resets the observer (TanStack).
+    const setOptionsFx = attach({
+      source: $observer,
+      effect: (observer, next: Options) => {
+        observer?.setOptions(next)
+      },
+    })
+    sample({ clock: $options.updates, target: setOptionsFx })
+  }
+
   const mutate = createEvent<TVariables>()
 
   // Fire-and-forget: don't return the promise so allSettled doesn't block
@@ -244,20 +331,24 @@ export function createMutation<
   }
 }
 
-function parseMutationArgs<TData, TError, TVariables, TOnMutateResult>(
-  arg1:
-    | QueryClient
-    | CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-  arg2?: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-): [
-  QueryClient | null,
-  CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-] {
-  if (arg2 !== undefined) {
-    return [arg1 as QueryClient, arg2]
-  }
-  return [
-    null,
-    arg1 as CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-  ]
+/**
+ * The factory is user code running inside an effector computation; an
+ * exception escaping it would break the graph. A failing factory instead
+ * yields options whose mutationFn rejects with that error, so the next call
+ * reports it through the ordinary error state, events and callbacks.
+ */
+function resolveMutationFactory<TOptions>(
+  source: OptionsSource,
+  factory: (params: any) => TOptions,
+): Store<TOptions> {
+  return resolveSource(source, (params): TOptions => {
+    try {
+      return factory(params)
+    } catch (error) {
+      return {
+        retry: false,
+        mutationFn: () => Promise.reject(error),
+      } as TOptions
+    }
+  })
 }

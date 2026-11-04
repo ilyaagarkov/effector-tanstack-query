@@ -11,6 +11,7 @@ export default defineConfig({
     'src/queryOptions.ts',
     'src/optionsCompat.ts',
     'src/infiniteQueryOptions.ts',
+    'src/mutationOptions.ts',
     'src/createQuery.ts',
     'src/createInfiniteQuery.ts',
     'src/createQueries.ts',

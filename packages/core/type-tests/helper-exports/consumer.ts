@@ -2,7 +2,8 @@ import { expectTypeOf } from 'vitest'
 import { createStore, type Store } from 'effector'
 import { QueryClient, type InfiniteData } from '@tanstack/query-core'
 import { createQuery, createInfiniteQuery } from '@effector-tanstack-query/core'
-import { todoOptions, pageOptions, tupleSourceQuery, tupleSourcePages, type SourceSnapshot } from './library.js'
+import { todoOptions, pageOptions, tupleSourceQuery, tupleSourcePages, renameOptions, renameMutation, type SourceSnapshot } from './library.js'
+import { createMutation, type MutationResult } from '@effector-tanstack-query/core'
 
 const client = new QueryClient()
 const query = createQuery({ source: createStore(1), query: todoOptions })
@@ -24,3 +25,11 @@ client.setQueryData(todoOptions(1).queryKey, 'selected title')
 expectTypeOf<SourceSnapshot>().toEqualTypeOf<readonly [number, string]>()
 expectTypeOf(tupleSourceQuery(createStore(1), createStore('x')).$data).toEqualTypeOf<Store<string | undefined>>()
 expectTypeOf(tupleSourcePages(createStore(1), createStore('x')).$data).toEqualTypeOf<Store<string | undefined>>()
+
+type Renamed = { id: number; title: string }
+expectTypeOf(renameMutation(createStore(1))).toEqualTypeOf<
+  MutationResult<Renamed, Error, string, { previous: string }>
+>()
+expectTypeOf(
+  createMutation({ source: { id: createStore(1) }, mutation: renameOptions }),
+).toEqualTypeOf<MutationResult<Renamed, Error, string, { previous: string }>>()

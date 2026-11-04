@@ -28,6 +28,112 @@ function createMutation<
 ): MutationResult<TData, TError, TVariables, TOnMutateResult>
 ```
 
+## Factory form
+
+Pass an existing options factory through `source` and `mutation`:
+
+```ts
+import { createMutation, mutationOptions } from '@effector-tanstack-query/core'
+
+// updateTodo.mo.ts — plain values in, ordinary options out, no Effector.
+export const updateTodoOptions = ({ todoId }: { todoId: number }) =>
+  mutationOptions({
+    mutationKey: ['todos', 'update'],
+    mutationFn: (patch: { title: string }) => patchTodo(todoId, patch),
+    onMutate: async (patch) => ({ previousTitle: patch.title }),
+  })
+
+const updateTodo = createMutation({
+  name: 'todo.update',
+  source: { todoId: $todoId },
+  mutation: updateTodoOptions,
+})
+
+updateTodo.mutate({ title: 'Buy milk' })
+
+// The explicit-client overload works the same way.
+const explicit = createMutation(queryClient, {
+  source: { todoId: $todoId },
+  mutation: updateTodoOptions,
+})
+```
+
+`source` accepts a store, a shallow object of stores, or an array/tuple of
+stores; `mutation` receives their plain values. `source` holds the context
+of the mutation (the todo being edited), while `variables` remain the payload
+of each call (the patch). `name` is the only other top-level field. Every
+mutation option lives inside the factory, and mixing in inline options is a
+type error.
+
+`TData`, `TError`, `TVariables` and the `onMutate` result are inferred from
+the returned options. Native helpers such as `mutationOptions` from
+`@tanstack/react-query`, our [`mutationOptions`](/effector-tanstack-query/api/query-options/#mutationoptions),
+and plain objects are all accepted.
+
+### Lifecycle
+
+The factory must be pure and synchronous; network work belongs in
+`mutationFn`. It runs when the scope first reads the options and again on every
+source change. The new options go to the observer through
+`MutationObserver.setOptions`, just as `useMutation(options(params))`
+behaves when a component re-renders:
+
+- **The next call** runs with the options for the current source.
+- **A pending call** keeps running its `mutationFn`. TanStack hands it the
+  new options, so the option-level `onSuccess` / `onError` / `onSettled`
+  that run when it finishes come from the new source. To keep the old values,
+  read them from `variables` or from the `onMutate` result.
+- **A changed `mutationKey`** resets the observer. The pending call still
+  finishes in the `MutationCache`, but it no longer reaches `$status` /
+  `$data` or `finished`. Keep the key stable and pass the changing parameter
+  through `source`.
+- **Concurrent calls** behave as in the inline form: the stores and `finished`
+  follow the latest call.
+
+If the factory throws, the next call fails with that error. You get
+`$status: 'error'`, `$error`, `finished.failure` and the per-call `onError`,
+but the Effector graph never throws, and once the source changes to a value
+the factory accepts, the mutation recovers.
+
+### Typing composition
+
+Spread a helper's result into `mutationOptions(...)` to add callbacks with full
+types:
+
+```ts
+const updateTodo = createMutation({
+  source: { todoId: $todoId },
+  mutation: (params) =>
+    mutationOptions({
+      ...updateTodoOptions(params),
+      onSuccess: (todo, patch, rollback) => {/* all typed */},
+    }),
+})
+```
+
+A bare returned object works too. When the factory's parameter is annotated,
+or the factory takes none, its callbacks are typed from the sibling
+`mutationFn` and `onMutate`, as in `useMutation({ … })`:
+
+```ts
+createMutation({
+  source: $todoId,
+  mutation: (todoId: number) => ({
+    mutationFn: (patch: Patch) => patchTodo(todoId, patch),
+    onSuccess: (todo) => {/* todo: Todo */},
+  }),
+})
+```
+
+Without that annotation, TypeScript can't type such callbacks: their
+parameters are `unknown` (never `any`), so using them is a type error until you
+annotate them or wrap the object in `mutationOptions`. The mutation's result
+types are still inferred.
+
+Explicit generics (`createMutation<Todo, ApiError, Patch>({ source, mutation })`)
+are supported, but they leave the source type at its default, as with
+`createQuery`. The factory then cannot rely on the source value's type.
+
 ## Options
 
 `CreateMutationOptions` extends `MutationObserverOptions` from `@tanstack/query-core`:

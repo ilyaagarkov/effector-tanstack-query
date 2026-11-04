@@ -272,6 +272,9 @@ export type CreateMutationOptions<
 > = MutationObserverOptions<TData, TError, TVariables, TOnMutateResult> & {
   /** See {@link CreateQueryOptions.name}. */
   name?: string
+  // Fields of the factory form; rejected so the two forms can't be mixed.
+  source?: never
+  mutation?: never
 }
 
 export type MutationStatus = 'idle' | 'pending' | 'success' | 'error'
@@ -584,3 +587,100 @@ export type CreateInfiniteQueryFactoryOptions<
   >['refetchInterval']
 > &
   FactoryOnly<InfiniteQueryObserverOptions>
+
+/**
+ * Reuses an ordinary mutation options factory. `source` supplies contextual
+ * parameters (e.g. the edited entity); `variables` stay the payload of each
+ * call. The factory reruns on every source change and its options apply to
+ * the observer, as `useMutation(options(params))` does on re-render. An
+ * exception thrown by `mutation` fails the next call with that error.
+ *
+ * This form takes the result types as explicit generics. Without them,
+ * `createMutation` captures the returned options instead — see
+ * {@link MutationFactoryInput}.
+ */
+export type CreateMutationFactoryOptions<
+  TSource extends OptionsSource,
+  TData = unknown,
+  TError = DefaultError,
+  TVariables = void,
+  TOnMutateResult = unknown,
+> = MutationFactoryInput<
+  TSource,
+  MutationObserverOptions<TData, TError, TVariables, TOnMutateResult>
+>
+
+/**
+ * The factory form as inferred: `TOptions` is the concrete object the factory
+ * returns. Capturing it (rather than contextually typing the return as
+ * `MutationObserverOptions<…>`) keeps nested helper results precise; the
+ * result types are extracted afterwards by {@link InferMutationTypes}.
+ * Callbacks of a bare returned object get no contextual types — annotate them
+ * or build the object with `mutationOptions`.
+ */
+export type MutationFactoryInput<
+  TSource extends OptionsSource,
+  TOptions,
+> = {
+  /** See {@link CreateQueryOptions.name}. */
+  name?: string
+  source: TSource
+  mutation: (source: SourceValue<TSource>) => TOptions
+} & FactoryOnly<MutationObserverOptions>
+
+type InferredOptions<T> =
+  T extends MutationObserverOptions<infer D, infer E, infer V, infer C>
+    ? [D, E, V, C]
+    : never
+// Variables come from mutationFn's signature where present, so `() => …`
+// means void (TanStack's default) while `(input: unknown) => …` stays unknown.
+type InferVariables<T, Fallback> = T extends {
+  mutationFn?: infer F
+}
+  ? NonNullable<F> extends (...args: infer A) => any
+    ? A extends [] ? void : A[0]
+    : Fallback
+  : Fallback
+
+/**
+ * `[TData, TError, TVariables, TOnMutateResult]` of captured mutation options.
+ * An error type nothing mentions falls back to the registered `DefaultError`.
+ */
+export type InferMutationTypes<TOptions> =
+  InferredOptions<TOptions> extends [infer D, infer E, infer V, infer C]
+    ? [D, unknown extends E ? DefaultError : E, InferVariables<TOptions, V>, C]
+    : never
+
+type IsAny<T> = 0 extends 1 & T ? true : false
+
+/**
+ * The captured options must be valid options for the extracted types.
+ *
+ * Captured options with `any` data are rejected on purpose: that happens when
+ * a bare object's callback has no contextual type (`(data) => …` next to an
+ * annotated factory parameter). Rejecting it lets `createMutation` fall back
+ * to the contextually typed overload, which types such callbacks from their
+ * siblings, as `useMutation({ … })` does.
+ */
+export type MutationFactoryCheck<TOptions> =
+  IsAny<InferMutationTypes<TOptions>[0]> extends true
+    ? { mutation: 'createMutation: the factory must return mutation options' }
+    : MutationFactoryShapeCheck<TOptions>
+type MutationFactoryShapeCheck<TOptions> = [TOptions] extends [
+  MutationObserverOptions<
+    InferMutationTypes<TOptions>[0],
+    InferMutationTypes<TOptions>[1],
+    InferMutationTypes<TOptions>[2],
+    InferMutationTypes<TOptions>[3]
+  >,
+]
+  ? unknown
+  : { mutation: 'createMutation: the factory must return mutation options' }
+
+/** {@link MutationResult} of captured mutation options. */
+export type InferMutationResult<TOptions> = MutationResult<
+  InferMutationTypes<TOptions>[0],
+  InferMutationTypes<TOptions>[1],
+  InferMutationTypes<TOptions>[2],
+  InferMutationTypes<TOptions>[3]
+>
