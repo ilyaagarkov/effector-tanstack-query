@@ -8,7 +8,6 @@ import type {
   DehydratedState,
   FetchStatus,
   HydrateOptions,
-  MutateOptions,
   MutationFilters,
   QueryClient,
   QueryFilters,
@@ -22,6 +21,7 @@ export type { QueryFilters, MutationFilters } from '@tanstack/query-core'
 import { $queryClient } from '@effector-tanstack-query/core'
 import type {
   InfiniteQueryResult,
+  MutateWithParams,
   MutationResult,
   MutationStatus,
   QueriesResult,
@@ -166,7 +166,12 @@ export function useQuery<TData, TError = Error>(
   )
 }
 
-export interface UseMutationResult<TData, TError, TVariables> {
+export interface UseMutationResult<
+  TData,
+  TError,
+  TVariables,
+  TOnMutateResult = unknown,
+> {
   data: TData | undefined
   error: TError | null
   status: MutationStatus
@@ -184,12 +189,9 @@ export interface UseMutationResult<TData, TError, TVariables> {
    * that don't fit module-level `sample` wiring — navigation after success,
    * one-shot toasts, etc.
    */
-  mutateWith: (args: {
-    variables: TVariables
-    onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
-    onError?: MutateOptions<TData, TError, TVariables>['onError']
-    onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
-  }) => void
+  mutateWith: (
+    args: MutateWithParams<TData, TError, TVariables, TOnMutateResult>,
+  ) => void
   reset: () => void
 }
 
@@ -198,10 +200,17 @@ export interface UseMutationResult<TData, TError, TVariables> {
  * `start()` on mount and `unmounted()` on cleanup so the queryClient can
  * garbage-collect the mutation entry once no observers remain.
  */
-export function useMutation<TData = unknown, TError = Error, TVariables = void>(
-  mutation: MutationResult<TData, TError, TVariables>,
-  options?: ResultHookOptions<UseMutationResult<TData, TError, TVariables>>,
-): UseMutationResult<TData, TError, TVariables> {
+export function useMutation<
+  TData = unknown,
+  TError = Error,
+  TVariables = void,
+  TOnMutateResult = unknown,
+>(
+  mutation: MutationResult<TData, TError, TVariables, TOnMutateResult>,
+  options?: ResultHookOptions<
+    UseMutationResult<TData, TError, TVariables, TOnMutateResult>
+  >,
+): UseMutationResult<TData, TError, TVariables, TOnMutateResult> {
   const { snapshot, track } = useStoreRows(
     [storeRow(mutation, MUTATION_FIELDS)],
     options?.notifyOnChangeProps,

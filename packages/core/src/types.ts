@@ -276,10 +276,28 @@ export type CreateMutationOptions<
 
 export type MutationStatus = 'idle' | 'pending' | 'success' | 'error'
 
+/**
+ * Per-call callbacks for {@link MutationResult.mutateWith}. Each receives the
+ * result of the options' `onMutate` — `undefined` when it isn't set or
+ * didn't run, as upstream.
+ */
+export type MutateWithParams<
+  TData = unknown,
+  TError = Error,
+  TVariables = void,
+  TOnMutateResult = unknown,
+> = {
+  variables: TVariables
+  onSuccess?: MutateOptions<TData, TError, TVariables, TOnMutateResult>['onSuccess']
+  onError?: MutateOptions<TData, TError, TVariables, TOnMutateResult>['onError']
+  onSettled?: MutateOptions<TData, TError, TVariables, TOnMutateResult>['onSettled']
+}
+
 export interface MutationResult<
   TData = unknown,
   TError = Error,
   TVariables = void,
+  TOnMutateResult = unknown,
 > {
   /** The mutation result data, or `undefined` before success */
   $data: Store<TData | undefined>
@@ -300,7 +318,7 @@ export interface MutationResult<
   /** `true` when the mutation has not yet been triggered */
   $isIdle: Store<boolean>
   /** Per-scope MutationObserver. Created on `start()`. See {@link QueryResult.$observer}. */
-  $observer: Store<MutationObserver<TData, TError, TVariables, any> | null>
+  $observer: Store<MutationObserver<TData, TError, TVariables, TOnMutateResult> | null>
   /** See {@link QueryResult.$queryClient}. */
   $queryClient: Store<QueryClient | null>
   /** Triggers the mutation with the given variables */
@@ -310,12 +328,9 @@ export interface MutationResult<
    * observer-level ones. Use when you need component-local reactions
    * (e.g. navigate after success) without module-level `sample` wiring.
    */
-  mutateWith: EventCallable<{
-    variables: TVariables
-    onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
-    onError?: MutateOptions<TData, TError, TVariables>['onError']
-    onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
-  }>
+  mutateWith: EventCallable<
+    MutateWithParams<TData, TError, TVariables, TOnMutateResult>
+  >
   /** Resets the mutation state back to idle */
   reset: EventCallable<void>
   /**
