@@ -152,6 +152,37 @@ describe('createMutation (core)', () => {
     expect(onSettled).toHaveBeenCalled()
   })
 
+  it('mutateWith passes the onMutate result to per-call callbacks', async () => {
+    const onSuccess = vi.fn()
+    const onError = vi.fn()
+    let fail = false
+    const mutation = createMutation(queryClient, {
+      name: 'mutation.mutateWith.onMutate',
+      mutationFn: async (title: string) => {
+        if (fail) throw new Error('rejected')
+        return title
+      },
+      onMutate: async (title) => ({ previousTitle: `before-${title}` }),
+    })
+    const scope = fork({ values: [[$queryClient, queryClient]] })
+    await allSettled(mutation.start, { scope })
+
+    await allSettled(mutation.mutateWith, {
+      scope,
+      params: { variables: 'a', onSuccess },
+    })
+    await sleep(20)
+    expect(onSuccess.mock.calls[0]![2]).toEqual({ previousTitle: 'before-a' })
+
+    fail = true
+    await allSettled(mutation.mutateWith, {
+      scope,
+      params: { variables: 'b', onError },
+    })
+    await sleep(20)
+    expect(onError.mock.calls[0]![2]).toEqual({ previousTitle: 'before-b' })
+  })
+
   it('mutateWith is a no-op without start', async () => {
     const onSuccess = vi.fn()
     const mutation = createMutation<string, Error, number>(queryClient, {

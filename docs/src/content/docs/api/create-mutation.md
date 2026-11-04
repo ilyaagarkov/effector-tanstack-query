@@ -14,7 +14,7 @@ function createMutation<
   TOnMutateResult = unknown,
 >(
   options: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-): MutationResult<TData, TError, TVariables>
+): MutationResult<TData, TError, TVariables, TOnMutateResult>
 
 // Explicit client.
 function createMutation<
@@ -25,7 +25,7 @@ function createMutation<
 >(
   queryClient: QueryClient,
   options: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-): MutationResult<TData, TError, TVariables>
+): MutationResult<TData, TError, TVariables, TOnMutateResult>
 ```
 
 ## Options
@@ -45,7 +45,7 @@ function createMutation<
 | `meta`          | `Record<string, unknown>`                     | Forwarded to `MutationCache` callbacks |
 | `name`          | `string` (recommended)                        | Stable name for SID-based SSR          |
 
-## Return value (`MutationResult<TData, TError, TVariables>`)
+## Return value (`MutationResult<TData, TError, TVariables, TOnMutateResult>`)
 
 | Field        | Type                                               | Description                              |
 | ------------ | -------------------------------------------------- | ---------------------------------------- |
@@ -59,7 +59,7 @@ function createMutation<
 | `$isError`   | `Store<boolean>`                                   | Failed                                   |
 | `$isIdle`    | `Store<boolean>`                                   | Not triggered                            |
 | `mutate`     | `EventCallable<TVariables>`                        | Trigger mutation                         |
-| `mutateWith` | `EventCallable<{ variables; onSuccess?; onError?; onSettled? }>` | Trigger with per-call callbacks |
+| `mutateWith` | `EventCallable<MutateWithParams<…>>` — `{ variables; onSuccess?; onError?; onSettled? }` | Trigger with per-call callbacks; each receives the typed `onMutate` result (or `undefined`) |
 | `reset`      | `EventCallable<void>`                              | Reset to idle                            |
 | `start`      | `EventCallable<void>`                              | Subscribe observer                       |
 | `unmounted`  | `EventCallable<void>`                              | Unsubscribe (allows gcTime cleanup)      |

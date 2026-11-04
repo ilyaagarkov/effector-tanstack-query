@@ -33,6 +33,7 @@ export type {
   SourceValue,
   EffectorQueryKey,
   InfiniteQueryResult,
+  MutateWithParams,
   MutationResult,
   MutationStatus,
   QueriesResult,

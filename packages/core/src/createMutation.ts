@@ -7,10 +7,14 @@ import {
 } from 'effector'
 import type { Store } from 'effector'
 import { MutationObserver } from '@tanstack/query-core'
-import type { MutateOptions, QueryClient } from '@tanstack/query-core'
+import type { QueryClient } from '@tanstack/query-core'
 import { $queryClient } from './queryClient'
 import { sidConfig, warnMissingName } from './createBaseQuery'
-import type { CreateMutationOptions, MutationResult } from './types'
+import type {
+  CreateMutationOptions,
+  MutateWithParams,
+  MutationResult,
+} from './types'
 
 type MutationStatus = 'idle' | 'pending' | 'success' | 'error'
 
@@ -24,7 +28,7 @@ export function createMutation<
     | QueryClient
     | CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
   arg2?: CreateMutationOptions<TData, TError, TVariables, TOnMutateResult>,
-): MutationResult<TData, TError, TVariables> {
+): MutationResult<TData, TError, TVariables, TOnMutateResult> {
   const [explicitClient, options] = parseMutationArgs<
     TData,
     TError,
@@ -188,26 +192,14 @@ export function createMutation<
   // Per-call callbacks variant: forwards onSuccess/onError/onSettled to
   // observer.mutate(vars, opts). Use this for component-local reactions
   // that don't fit module-level `sample({ clock: finished.success })` wiring.
-  const mutateWith = createEvent<{
-    variables: TVariables
-    onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
-    onError?: MutateOptions<TData, TError, TVariables>['onError']
-    onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
-  }>()
+  type Params = MutateWithParams<TData, TError, TVariables, TOnMutateResult>
+  const mutateWith = createEvent<Params>()
 
   const mutateWithFx = attach({
     source: $observer,
     effect: (
       observer,
-      {
-        variables,
-        ...callbacks
-      }: {
-        variables: TVariables
-        onSuccess?: MutateOptions<TData, TError, TVariables>['onSuccess']
-        onError?: MutateOptions<TData, TError, TVariables>['onError']
-        onSettled?: MutateOptions<TData, TError, TVariables>['onSettled']
-      },
+      { variables, ...callbacks }: Params,
     ) => {
       if (!observer) return
       observer.mutate(variables, callbacks).catch(() => {})

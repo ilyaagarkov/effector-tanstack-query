@@ -56,16 +56,40 @@ function Component() {
 
 Per-call callbacks fire **in addition to** the observer-level ones set in `createMutation`'s options — never instead.
 
+Each receives the result of the options' `onMutate` as its third argument, typed — e.g. a snapshot for an optimistic-update rollback. It's `undefined` when `onMutate` isn't set or didn't run:
+
+```tsx
+const updateTodo = createMutation({
+  mutationFn: (todo: Todo) => api.updateTodo(todo),
+  onMutate: (todo) => ({ previous: getCachedTodo(todo.id) }),
+})
+
+const { mutateWith } = useMutation(updateTodo)
+mutateWith({
+  variables: todo,
+  onError: (_error, _todo, rollback) => {
+    if (rollback?.previous) restoreTodo(rollback.previous) // rollback is typed
+  },
+})
+```
+
 ## Type signature
 
 ```ts
-function useMutation<TData = unknown, TError = Error, TVariables = void>(
-  mutation: MutationResult<TData, TError, TVariables>,
+function useMutation<
+  TData = unknown,
+  TError = Error,
+  TVariables = void,
+  TOnMutateResult = unknown,
+>(
+  mutation: MutationResult<TData, TError, TVariables, TOnMutateResult>,
   // notifyOnChangeProps: 'tracked' (default) | 'all' | a list of result fields
-  options?: ResultHookOptions<UseMutationResult<TData, TError, TVariables>>,
-): UseMutationResult<TData, TError, TVariables>
+  options?: ResultHookOptions<
+    UseMutationResult<TData, TError, TVariables, TOnMutateResult>
+  >,
+): UseMutationResult<TData, TError, TVariables, TOnMutateResult>
 
-interface UseMutationResult<TData, TError, TVariables> {
+interface UseMutationResult<TData, TError, TVariables, TOnMutateResult = unknown> {
   data: TData | undefined
   error: TError | null
   status: 'idle' | 'pending' | 'success' | 'error'
@@ -78,9 +102,10 @@ interface UseMutationResult<TData, TError, TVariables> {
   mutate: (variables: TVariables) => void
   mutateWith: (args: {
     variables: TVariables
-    onSuccess?: (data, vars, ctx) => void
-    onError?: (error, vars, ctx) => void
-    onSettled?: (data, error, vars, ctx) => void
+    // onMutateResult: TOnMutateResult | undefined
+    onSuccess?: (data, vars, onMutateResult, ctx) => void
+    onError?: (error, vars, onMutateResult, ctx) => void
+    onSettled?: (data, error, vars, onMutateResult, ctx) => void
   }) => void
   reset: () => void
 }

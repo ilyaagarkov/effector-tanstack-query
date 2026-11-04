@@ -16,6 +16,10 @@ Both `@effector-tanstack-query/core` and `@effector-tanstack-query/react` share 
 
 - **`notifyOnChangeProps` removed from factory option types** — `@effector-tanstack-query/core`. `createQuery`, `createInfiniteQuery`, `createQueries` items, `queryOptions` and `infiniteQueryOptions` accepted it, but the observer always forced `'all'` so the model stores stay current, and the value was silently ignored. It's now a type error; set it on the React hook instead. Options objects built elsewhere (e.g. native `@tanstack/react-query` helpers) are still accepted, and the value is still ignored.
 
+### Fixed
+
+- **`onMutate` result types reach per-call callbacks** ([#21](https://github.com/ilyaagarkov/effector-tanstack-query/issues/21)) — both packages. `createMutation` accepted the type of `onMutate`'s result but returned `MutationResult<TData, TError, TVariables>` without it, so the third argument of `mutateWith`'s `onSuccess` / `onError` / `onSettled` was `unknown`. `MutationResult`, `UseMutationResult` and `useMutation` now carry `TOnMutateResult` (default `unknown`), and the callbacks receive `TOnMutateResult | undefined`, as upstream. Existing three-generic calls and annotations still compile. New exported type: `MutateWithParams`.
+
 ### Added
 
 - **`notifyOnChangeProps` option** on every result hook: `'tracked'` (default), `'all'` to re-render on every field as in 1.x, or a list of fields (`['data', 'error']`) to re-render on those only, whatever the component reads. The list is typed to the hook's result fields. Exported types: `NotifyOnChangeProps`, `ResultHookOptions`, `ResultField`.
